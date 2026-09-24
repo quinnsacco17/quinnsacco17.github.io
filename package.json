@@ -1,0 +1,23 @@
+{
+  "name": "quinnsacco17.github.io",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quinnsacco17/quinnsacco17.github.io.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/quinnsacco17/quinnsacco17.github.io/issues"
+  },
+  "homepage": "https://github.com/quinnsacco17/quinnsacco17.github.io#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
