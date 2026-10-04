@@ -9,6 +9,7 @@ import { recommend, TARGET_MODES, baseConfig, calibrate } from './engine/recomme
 import { renderPreview, SETTING_EXPLAIN } from './preview.js';
 import { matchHardware } from './engine/match.js';
 import { buildEngineSetup } from './engine/setup.js';
+import { networkAdvice } from './engine/network.js';
 import { HELP, helpBlock, measureBlock, pollingTester, runAction } from './assist.js';
 
 const $ = (id) => document.getElementById(id);
@@ -194,6 +195,8 @@ function renderResult(rec, game, es) {
   var redraw = () => { const st = {}; game.settings.forEach((s, i) => { st[s.key] = live.settings[i]; }); st.rt = live.rtIndex; st.upscale = UPSCALE_MODES.find((m) => m.id === live.mode).scale; st.upTech = live.upscaler?.tech; renderPreview(canvas, st); };
   det.append(el('h3', {}, 'Preview'), canvas, el('div', { class: 'notes' }, 'Illustration of what your settings change, not real game footage. It updates when you change a setting above.')); redraw();
   const adv = el('div', { class: 'notes' }); rec.frameCap.slice(1).forEach((t) => adv.append(el('div', {}, '• ' + t))); game.tips.forEach((t) => adv.append(el('div', {}, '• ' + t)));
+  if (setup.net && game.competitive) { const na = networkAdvice(setup.net, { network: setup.network }); if (na.online) adv.prepend(el('div', {}, '• Internet: ' + na.online.text)); }
+  if (setup.net && setup.background?.streaming) { const na = networkAdvice(setup.net); if (na.streaming) adv.prepend(el('div', {}, '• ' + na.streaming.text)); }
   det.append(el('h3', {}, 'Tips for this game'), adv);
   const f = e.factors; if (f.warnings.length) { const w = el('div', { class: 'warnings' }); f.warnings.forEach((t) => w.append(el('div', {}, t))); det.append(el('h3', {}, 'Things in your setup holding this back'), w); }
   const alt = el('table'); alt.append(el('tr', {}, el('th', {}, 'Other option'), el('th', {}, 'fps'), el('th', {}, 'Looks'), el('th', {}, 'Goal')));
@@ -386,7 +389,43 @@ function renderSummary() {
     pref('Preferred upscaler', 'upscaler', [['auto', 'Pick the best one'], ['dlss', 'DLSS (NVIDIA)'], ['fsr', 'FSR (AMD, works everywhere)'], ['xess', 'XeSS (Intel, works everywhere)']], 'auto'),
     pref('Ray tracing', 'rt', [['auto', 'Use if there’s headroom'], ['prefer', 'Prefer ray tracing on'], ['off', 'Always off']], 'auto'),
     el('div', { class: 'hero-actions' }, el('button', { class: 'small', type: 'button', onclick: () => { if (confirm('Remove every pinned setting in every game?')) { setup.locks = {}; saveSetup(); } } }, 'Clear all pinned settings')));
-  $('setupSummary').innerHTML = ''; $('setupSummary').append(card, pcard);
+  $('setupSummary').innerHTML = ''; $('setupSummary').append(card, pcard, netCard());
+}
+
+function netCard() {
+  const c = el('div', { class: 'summary-card' }, el('h2', {}, 'Internet'));
+  const body = el('div');
+  const show = () => {
+    body.innerHTML = '';
+    const n = setup.net;
+    if (!n) { body.append(el('div', { class: 'notes' }, isDesktopApp ? 'Test your connection to see how it handles online games, cloud gaming, and streaming.' : 'Enter your speeds from any speed test (e.g. speed.cloudflare.com).')); return; }
+    [['Download', `${n.down.toFixed(n.down < 10 ? 1 : 0)} Mbps`], ['Upload', `${n.up.toFixed(n.up < 10 ? 1 : 0)} Mbps`], ['Ping', n.ping != null ? `${Math.round(n.ping)} ms` : '—'], ['Jitter', n.jitter != null ? `${n.jitter.toFixed(1)} ms` : '—'], ['Connection', (NETWORK.find((x) => x.id === setup.network) || {}).name || '—']].forEach(([k, v]) => body.append(el('div', { class: 'set-row' }, el('span', {}, k), el('strong', {}, v))));
+    const a = networkAdvice(n, { network: setup.network });
+    const tips = el('div', { class: 'net-advice' });
+    if (a.online) tips.append(el('div', { class: 'tip' + (/Poor|Bad/.test(a.online.level) ? ' warn' : '') }, a.online.text));
+    a.cloud.forEach((x) => tips.append(el('div', { class: 'tip' }, `${x.service}: ${x.text}`)));
+    if (a.streaming) tips.append(el('div', { class: 'tip' }, a.streaming.text));
+    if (a.download) tips.append(el('div', { class: 'tip' }, a.download));
+    a.notes.forEach((t) => tips.append(el('div', { class: 'tip warn' }, t)));
+    body.append(tips, el('div', { class: 'notes' }, `Tested ${new Date(n.at).toLocaleString()}.`));
+  };
+  const actions = el('div', { class: 'hero-actions' });
+  if (isDesktopApp) {
+    const btn = el('button', { class: 'big primary', type: 'button' }, setup.net ? 'Test again' : 'Test my internet');
+    btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = 'Testing… (about 20 seconds)';
+      const r = await window.optimizer.speedTest((p) => { btn.textContent = `Testing ${p.stage}… ${Math.round(p.pct * 100)}%`; });
+      btn.disabled = false; btn.textContent = 'Test again';
+      if (!r.ok) { alert(r.error); return; }
+      setup.net = { down: r.down, up: r.up, ping: r.ping, jitter: r.jitter, at: r.at }; saveSetup(); show();
+    };
+    actions.append(btn);
+  }
+  const manual = el('details', { class: 'subtle' }, el('summary', {}, isDesktopApp ? 'Or type your speeds' : 'Enter your speeds'));
+  const fd = el('input', { type: 'number', placeholder: 'Download Mbps', min: 0 }), fu = el('input', { type: 'number', placeholder: 'Upload Mbps', min: 0 }), fp = el('input', { type: 'number', placeholder: 'Ping ms', min: 0 });
+  manual.append(el('div', { class: 'row' }, fd, fu, fp), el('button', { class: 'small', type: 'button', onclick: () => { if (!+fd.value || !+fu.value) return alert('Enter download and upload.'); setup.net = { down: +fd.value, up: +fu.value, ping: +fp.value || null, jitter: null, at: new Date().toISOString() }; saveSetup(); show(); } }, 'Save'));
+  c.append(body, actions, manual); show();
+  return c;
 }
 
 /* ---------- First-run setup guide ---------- */

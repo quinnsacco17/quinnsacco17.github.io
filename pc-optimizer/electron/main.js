@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { detectHardware } from './detect.js';
 import { applySettings, describeTarget } from './apply.js';
+import { speedTest } from './speedtest.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,6 +68,7 @@ app.whenReady().then(() => {
     lastDetected = new Set([...(hw.graphics?.displays || []).map((d) => d.model), `${hw.system?.manufacturer || ''} ${hw.system?.model || ''}`.trim()].filter(Boolean));
     return hw;
   });
+  ipcMain.handle('speedtest', async (ev) => { try { return { ok: true, ...(await speedTest((p) => ev.sender.send('speedtest-progress', p))) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('open', async (ev, target, arg) => {
     if (SEARCH_TARGETS[target]) {
       if (typeof arg !== 'string' || arg.length > 120 || !lastDetected.has(arg)) return { ok: false, error: 'Run hardware detection first.' };
