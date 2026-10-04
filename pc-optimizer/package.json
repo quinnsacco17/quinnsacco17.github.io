@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "start": "electron .",
-    "test": "node --test tests/engine.test.js tests/apply.test.js tests/detect.test.js",
+    "test": "node --test tests/engine.test.js tests/apply.test.js tests/detect.test.js tests/handheld.test.js",
     "dist:win": "electron-builder --win nsis portable --x64",
     "dist:mac": "electron-builder --mac dmg --arm64 --x64",
     "web": "npx http-server src -p 8080"

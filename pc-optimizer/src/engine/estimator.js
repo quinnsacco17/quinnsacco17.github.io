@@ -2,6 +2,10 @@ import { GPU_BY_NAME } from './data/gpus.js';
 import { CPU_BY_NAME } from './data/cpus.js';
 import { linkCheck } from './data/displays.js';
 
+// Tunables fitted against published benchmarks (tests/handheld-validation.mjs, tests/engine.test.js).
+export const MODEL = { lowResExp: 0.4, settingsK: 0.9 };
+const resScale = (r, e) => (r >= 1 ? Math.pow(r, e) : Math.pow(r, Math.min(e, MODEL.lowResExp)));
+
 export const UPSCALE_MODES = [
   { id: 'native', name: 'Native (TAA)', scale: 1.0 },
   { id: 'dlaa', name: 'DLAA / Native AA', scale: 1.0, overhead: 1.0 },
@@ -157,10 +161,11 @@ export function estimate(setup, game, config) {
   const internalPixels = outPixels * um.scale * um.scale;
   let gpuMult = 1, cpuMult = 1;
   game.settings.forEach((s, i) => { const o = Math.min(config.settings[i] ?? s.options.length - 1, s.options.length - 1); gpuMult *= s.gpu[o]; cpuMult *= s.cpu[o]; });
+  gpuMult = Math.pow(gpuMult, (game.settingsK ?? 1) * MODEL.settingsK);
   const rtMode = game.rt ? game.rt.modes[config.rtIndex || 0] : null;
   if (rtMode) { const rtEff = gpu.rt > 0 ? gpu.rt : 0.25; gpuMult *= 1 + (rtMode.gpu - 1) / rtEff; cpuMult *= rtMode.cpu; }
   const gpuEff = gpu.idx * f.gpu, cpuEff = cpu.idx * f.cpu;
-  const resCost = 0.85 * Math.pow(internalPixels / refPixels, game.resExp) + 0.15 * Math.pow(outPixels / refPixels, game.resExp);
+  const resCost = 0.85 * resScale(internalPixels / refPixels, game.resExp) + 0.15 * resScale(outPixels / refPixels, game.resExp);
   let gpuMs = game.gpuMs * gpuMult * resCost * (100 / gpuEff);
   if (config.upscaler && um.id !== 'native') { const tech = UPSCALER_VISUAL[config.upscaler.tech] || UPSCALER_VISUAL.fsr3; gpuMs += (um.overhead || tech.overhead) * (outPixels / 8294400) * (100 / gpuEff); }
   // Fixed per-frame GPU cost (present, UI, composition): keeps light games from scaling absurdly.
