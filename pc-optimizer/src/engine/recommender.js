@@ -10,7 +10,7 @@ export const TARGET_MODES = [
 ];
 
 export function baseConfig(game, w, h) {
-  return { settings: game.settings.map((s) => s.options.length - 1), rtIndex: 0, upscaler: null, mode: 'native', fg: 'off', w, h };
+  return { settings: game.settings.map((s) => s.defaultIndex ?? s.options.length - 1), rtIndex: 0, upscaler: null, mode: 'native', fg: 'off', w, h };
 }
 
 function stepDown(game, cfg, competitive) {

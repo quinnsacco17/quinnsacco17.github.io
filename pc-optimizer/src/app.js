@@ -227,7 +227,7 @@ function runCalibrate() {
   const game = GAME_BY_ID[$('calGame').value]; const es = engineSetup();
   const [w, h] = $('calRes').value.split('x').map(Number); const preset = +$('calPreset').value;
   const gpu = resolveGpu(es); const ups = availableUpscalers(gpu, game);
-  const cfg = { settings: game.settings.map((s) => Math.min(preset, s.options.length - 1)), rtIndex: game.rt ? +$('calRt').value : 0, upscaler: $('calUp').value !== 'native' && ups[0] ? ups[0] : null, mode: $('calUp').value, fg: $('calFg').value, w, h };
+  const cfg = { settings: game.settings.map((s) => Math.min(preset, s.defaultIndex ?? s.options.length - 1)), rtIndex: game.rt ? +$('calRt').value : 0, upscaler: $('calUp').value !== 'native' && ups[0] ? ups[0] : null, mode: $('calUp').value, fg: $('calFg').value, w, h };
   const fps = +$('calFps').value; if (!fps) return alert('Enter the measured fps.');
   const cal = calibrate(es, game, cfg, fps);
   setup.calibration = cal; saveSetup(); refreshSetupWarnings();
