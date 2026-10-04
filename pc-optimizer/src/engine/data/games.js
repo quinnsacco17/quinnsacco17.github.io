@@ -1,0 +1,97 @@
+// Reference: RTX 4090 (gpu idx 100) at 1920x1080, all settings max, no RT, native res -> gpuMs.
+// cpuMs: CPU-limited frametime on a Ryzen 7 9800X3D (cpu idx 100) at max settings.
+// resExp: GPU time scales with (pixels/1080p)^resExp. Light esports titles have fixed costs -> lower exponent.
+// Setting multipliers are relative to the max option (=1.0). visual: 0-10 perceived quality per option.
+
+const S = {
+  tex: (vramLow = -2.5) => ({ key: 'textures', name: 'Texture Quality', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.97, 0.98, 0.99, 1], cpu: [1, 1, 1, 1], vram: [vramLow, vramLow * 0.6, vramLow * 0.3, 0], visual: [3, 6, 8.5, 10], weight: 1.6 }),
+  shadow: () => ({ key: 'shadows', name: 'Shadow Quality', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.80, 0.87, 0.94, 1], cpu: [0.95, 0.97, 0.99, 1], vram: [-0.3, -0.2, -0.1, 0], visual: [4, 6.5, 8.5, 10], weight: 1.2 }),
+  ao: () => ({ key: 'ao', name: 'Ambient Occlusion', options: ['Off', 'Low', 'High', 'Ultra'], gpu: [0.92, 0.96, 0.98, 1], cpu: [1, 1, 1, 1], vram: [0, 0, 0, 0], visual: [3, 6.5, 8.5, 10], weight: 1.0 }),
+  vol: () => ({ key: 'volumetrics', name: 'Volumetric Fog / Clouds', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.88, 0.92, 0.96, 1], cpu: [1, 1, 1, 1], vram: [0, 0, 0, 0], visual: [5, 7, 8.5, 10], weight: 0.8 }),
+  refl: () => ({ key: 'reflections', name: 'Screen Space Reflections', options: ['Off', 'Low', 'High', 'Ultra'], gpu: [0.93, 0.96, 0.98, 1], cpu: [1, 1, 1, 1], vram: [0, 0, 0, 0], visual: [4, 6.5, 8.5, 10], weight: 0.9 }),
+  draw: () => ({ key: 'draw', name: 'View Distance / LOD', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.95, 0.97, 0.99, 1], cpu: [0.85, 0.9, 0.96, 1], vram: [-0.3, -0.2, -0.1, 0], visual: [4, 6.5, 8.5, 10], weight: 1.3 }),
+  foliage: () => ({ key: 'foliage', name: 'Foliage / Vegetation', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.90, 0.94, 0.98, 1], cpu: [0.95, 0.97, 0.99, 1], vram: [0, 0, 0, 0], visual: [4, 6.5, 8.5, 10], weight: 0.9 }),
+  effects: () => ({ key: 'effects', name: 'Effects / Particles', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.94, 0.97, 0.99, 1], cpu: [0.98, 0.99, 1, 1], vram: [0, 0, 0, 0], visual: [5, 7, 8.5, 10], weight: 0.7 }),
+  crowd: () => ({ key: 'crowd', name: 'Crowd / NPC Density', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.97, 0.98, 0.99, 1], cpu: [0.88, 0.93, 0.97, 1], vram: [0, 0, 0, 0], visual: [5, 7, 8.5, 10], weight: 0.8 }),
+  aa: () => ({ key: 'aa', name: 'Anti-Aliasing', options: ['Off / FXAA', 'TAA', 'TAA High'], gpu: [0.97, 0.99, 1], cpu: [1, 1, 1], vram: [0, 0, 0], visual: [4, 8, 10], weight: 1.1 }),
+  post: () => ({ key: 'post', name: 'Post Processing', options: ['Low', 'High'], gpu: [0.97, 1], cpu: [1, 1], vram: [0, 0], visual: [7, 10], weight: 0.5 }),
+  mblur: () => ({ key: 'mblur', name: 'Motion Blur', options: ['Off', 'On'], gpu: [0.99, 1], cpu: [1, 1], vram: [0, 0], visual: [10, 9], weight: 0.3, competitiveOff: true }),
+  lumenGI: () => ({ key: 'gi', name: 'Global Illumination (Lumen)', options: ['Off / SSGI', 'Low', 'High', 'Epic'], gpu: [0.70, 0.85, 0.95, 1], cpu: [0.97, 0.98, 1, 1], vram: [-0.3, -0.2, 0, 0], visual: [3, 6.5, 8.5, 10], weight: 1.5 }),
+  lumenRefl: () => ({ key: 'lrefl', name: 'Reflections (Lumen)', options: ['Off / SSR', 'Low', 'High', 'Epic'], gpu: [0.85, 0.92, 0.97, 1], cpu: [1, 1, 1, 1], vram: [0, 0, 0, 0], visual: [4, 6.5, 8.5, 10], weight: 1.0 }),
+  vsm: () => ({ key: 'vsm', name: 'Shadows (Virtual Shadow Maps)', options: ['Low', 'Medium', 'High', 'Epic'], gpu: [0.82, 0.9, 0.95, 1], cpu: [0.97, 0.98, 1, 1], vram: [-0.3, -0.2, -0.1, 0], visual: [4, 6.5, 8.5, 10], weight: 1.2 }),
+  water: () => ({ key: 'water', name: 'Water Quality', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.95, 0.97, 0.99, 1], cpu: [1, 1, 1, 1], vram: [0, 0, 0, 0], visual: [5, 7, 8.5, 10], weight: 0.5 }),
+  hair: () => ({ key: 'hair', name: 'Hair / Strand Quality', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.93, 0.96, 0.98, 1], cpu: [1, 1, 1, 1], vram: [0, 0, 0, 0], visual: [5, 7, 8.5, 10], weight: 0.5 }),
+  tess: () => ({ key: 'tess', name: 'Tessellation / Terrain', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.95, 0.97, 0.99, 1], cpu: [1, 1, 1, 1], vram: [0, 0, 0, 0], visual: [5, 7, 8.5, 10], weight: 0.5 }),
+  physics: () => ({ key: 'physics', name: 'Physics / Destruction', options: ['Low', 'Medium', 'High', 'Ultra'], gpu: [0.98, 0.99, 1, 1], cpu: [0.9, 0.94, 0.98, 1], vram: [0, 0, 0, 0], visual: [6, 7.5, 9, 10], weight: 0.6 }),
+  renderDist: () => ({ key: 'renderdist', name: 'Render Distance (chunks)', options: ['8', '12', '16', '24', '32'], gpu: [0.48, 0.6, 0.7, 0.8, 1], cpu: [0.32, 0.43, 0.56, 0.71, 1], vram: [-1.3, -1.0, -0.8, -0.5, 0], visual: [3, 5.5, 7.5, 9, 10], weight: 1.5 }),
+};
+
+const RT = {
+  std: { visual: 2, modes: [{ name: 'Off', gpu: 1, cpu: 1, vram: 0, visual: 0 }, { name: 'RT Medium (shadows/AO)', gpu: 1.35, cpu: 1.1, vram: 0.8, visual: 1 }, { name: 'RT Ultra (shadows + reflections + GI)', gpu: 1.9, cpu: 1.25, vram: 1.5, visual: 2 }] },
+  light: { visual: 1, modes: [{ name: 'Off', gpu: 1, cpu: 1, vram: 0, visual: 0 }, { name: 'RT On', gpu: 1.4, cpu: 1.15, vram: 0.8, visual: 1 }] },
+  heavy: { visual: 3, modes: [{ name: 'Off', gpu: 1, cpu: 1, vram: 0, visual: 0 }, { name: 'RT Medium', gpu: 1.4, cpu: 1.1, vram: 0.8, visual: 1 }, { name: 'RT Ultra', gpu: 1.9, cpu: 1.25, vram: 1.5, visual: 2 }, { name: 'Path Tracing', gpu: 3.5, cpu: 1.3, vram: 2.5, visual: 3 }] },
+  mandatoryPT: { visual: 2, mandatory: true, modes: [{ name: 'RT (always on)', gpu: 1, cpu: 1, vram: 0, visual: 0 }, { name: 'Path Tracing', gpu: 2.4, cpu: 1.2, vram: 2.5, visual: 2 }] },
+};
+
+const std = (...extra) => [S.tex(), S.shadow(), S.ao(), S.vol(), S.refl(), S.draw(), S.effects(), S.aa(), S.post(), S.mblur(), ...extra];
+const ue5 = (...extra) => [S.tex(), S.vsm(), S.lumenGI(), S.lumenRefl(), S.vol(), S.draw(), S.foliage(), S.effects(), S.post(), S.mblur(), ...extra];
+const esports = (...extra) => [S.tex(-1.2), S.shadow(), S.ao(), S.effects(), S.aa(), S.post(), S.mblur(), ...extra];
+
+function G(o) {
+  return { resExp: 0.85, vramBase: 5.0, vramPerMP: 0.8, upscalers: ['dlss', 'fsr', 'xess'], fg: true, cap: null, competitive: false, rt: null, settings: std(), tips: [], ...o };
+}
+
+export const GAMES = [
+  G({ id: 'cyberpunk', name: 'Cyberpunk 2077', gpuMs: 4.3, cpuMs: 5.0, vramBase: 6.5, vramPerMP: 0.5, rt: RT.heavy, settings: std(S.crowd()), tips: ['Crowd Density is the biggest CPU setting.', 'Volumetric Fog and SSR Ultra are expensive for little gain; High looks nearly identical.'] }),
+  G({ id: 'fortnite', name: 'Fortnite (DX12 / UE5)', gpuMs: 5.0, cpuMs: 4.8, resExp: 0.8, vramBase: 4.5, vramPerMP: 0.6, settings: ue5(S.aa()), competitive: true, tips: ['Performance Mode (separate renderer) is ~4x lighter than DX12 Low if you only care about fps.', 'Lumen GI and Lumen Reflections are the two settings that matter most.'] }),
+  G({ id: 'valorant', name: 'VALORANT', gpuMs: 1.1, cpuMs: 1.4, resExp: 0.7, vramBase: 2.0, vramPerMP: 0.3, upscalers: [], fg: false, settings: esports(S.vol()), competitive: true, tips: ['Almost always CPU bound. Settings barely change fps on a mid GPU.', 'Use in-game fps cap at a multiple of refresh for consistent frame pacing.'] }),
+  G({ id: 'cs2', name: 'Counter-Strike 2', gpuMs: 2.0, cpuMs: 1.8, resExp: 0.7, vramBase: 3.0, vramPerMP: 0.4, upscalers: ['fsr'], fg: false, settings: esports(S.vol()), competitive: true, tips: ['Shadow Quality and Ambient Occlusion are the two GPU-heavy settings. Keep Shadows at High for visibility of enemy shadows.', 'Disable FSR unless you are on an iGPU; it hurts readability.'] }),
+  G({ id: 'apex', name: 'Apex Legends', gpuMs: 2.8, cpuMs: 3.3, resExp: 0.8, cap: 300, vramBase: 3.5, vramPerMP: 0.5, upscalers: [], fg: false, settings: esports(S.vol(), S.draw()), competitive: true, tips: ['Volumetric Lighting and Spot Shadow Detail are the heavy ones.', 'Game caps at 300 fps without launch options.'] }),
+  G({ id: 'ow2', name: 'Overwatch 2', gpuMs: 2.3, cpuMs: 2.5, resExp: 0.78, cap: 600, vramBase: 3.0, vramPerMP: 0.4, upscalers: ['fsr'], fg: false, settings: esports(S.draw()), competitive: true, tips: ['Shadow Detail and Local Fog Detail cost the most.'] }),
+  G({ id: 'r6', name: 'Rainbow Six Siege X', gpuMs: 2.0, cpuMs: 2.5, resExp: 0.75, vramBase: 3.0, vramPerMP: 0.5, upscalers: ['dlss', 'fsr', 'xess'], fg: false, settings: esports(S.draw()), competitive: true }),
+  G({ id: 'cod', name: 'Call of Duty: Black Ops 7 / Warzone', gpuMs: 4.2, cpuMs: 4.5, resExp: 0.78, vramBase: 5.5, vramPerMP: 0.6, settings: std(S.tess()), competitive: true, tips: ['Set the VRAM Scale Target to 80-85% to avoid stutter.', 'Shadow Quality, Volumetric Quality, and SSR are the heavy three.'] }),
+  G({ id: 'rivals', name: 'Marvel Rivals (UE5)', gpuMs: 5.5, cpuMs: 5.5, resExp: 0.82, vramBase: 5.0, vramPerMP: 0.6, settings: ue5(S.aa()), competitive: true, tips: ['Lumen GI is the single biggest fps cost. Off/SSGI roughly adds 30-40% fps.'] }),
+  G({ id: 'finals', name: 'THE FINALS (UE5)', gpuMs: 4.5, cpuMs: 4.5, resExp: 0.82, vramBase: 4.5, vramPerMP: 0.6, rt: RT.light, settings: ue5(S.physics()), competitive: true }),
+  G({ id: 'bf6', name: 'Battlefield 6', gpuMs: 5.5, cpuMs: 6.0, resExp: 0.85, vramBase: 6.0, vramPerMP: 0.7, settings: std(S.tess(), S.physics()), competitive: true, tips: ['64-player Conquest is CPU heavy; Terrain Quality and Mesh Quality mostly load the CPU.'] }),
+  G({ id: 'delta', name: 'Delta Force', gpuMs: 3.5, cpuMs: 4.0, resExp: 0.8, vramBase: 4.0, vramPerMP: 0.5, settings: std(), competitive: true }),
+  G({ id: 'pubg', name: 'PUBG: Battlegrounds', gpuMs: 3.5, cpuMs: 4.5, resExp: 0.8, vramBase: 4.0, vramPerMP: 0.5, upscalers: ['dlss', 'fsr'], fg: false, settings: std(S.foliage()), competitive: true }),
+  G({ id: 'tarkov', name: 'Escape from Tarkov', gpuMs: 4.0, cpuMs: 8.0, resExp: 0.85, vramBase: 6.0, vramPerMP: 0.6, upscalers: ['dlss', 'fsr'], fg: false, settings: std(S.draw()), competitive: true, tips: ['Heavily CPU bound on Streets of Tarkov. GPU settings barely matter; Object LOD and Shadow Visibility do.'] }),
+  G({ id: 'rust', name: 'Rust', gpuMs: 5.0, cpuMs: 7.0, resExp: 0.85, vramBase: 5.0, vramPerMP: 0.7, upscalers: ['dlss', 'fsr'], fg: false, settings: std(S.foliage(), S.water(), S.draw()), competitive: true, tips: ['Grass Displacement, Object Quality, and Draw Distance dominate CPU load.'] }),
+  G({ id: 'helldivers2', name: 'Helldivers 2', gpuMs: 5.0, cpuMs: 6.0, resExp: 0.85, vramBase: 5.5, vramPerMP: 0.7, upscalers: [], fg: false, settings: std(S.foliage(), S.physics()) }),
+  G({ id: 'roblox', name: 'Roblox', gpuMs: 1.5, cpuMs: 3.0, resExp: 0.7, vramBase: 2.0, vramPerMP: 0.3, upscalers: [], fg: false, settings: [{ key: 'gq', name: 'Graphics Quality (slider)', options: ['1-3', '4-6', '7-8', '9-10'], gpu: [0.4, 0.6, 0.82, 1], cpu: [0.6, 0.75, 0.9, 1], vram: [-1, -0.6, -0.3, 0], visual: [3, 6, 8.5, 10], weight: 2 }, S.mblur()], tips: ['Experience-dependent; the slider is the only real control.'] }),
+  G({ id: 'minecraft', name: 'Minecraft: Java Edition', gpuMs: 1.8, cpuMs: 4.5, resExp: 0.75, vramBase: 2.0, vramPerMP: 0.3, upscalers: [], fg: false, settings: [S.renderDist(), { key: 'shaders', name: 'Shaders', baselineIndex: 0, options: ['Off', 'Light (Complementary low)', 'Medium', 'Heavy (SEUS PTGI / Rethinking)'], gpu: [1, 2.2, 3.5, 6], cpu: [1, 1.1, 1.15, 1.2], vram: [0, 0.5, 1, 2], visual: [5, 8, 9, 10], weight: 2 }, { key: 'sim', name: 'Simulation Distance', options: ['5', '8', '12', '16'], gpu: [1, 1, 1, 1], cpu: [0.75, 0.85, 0.95, 1], vram: [0, 0, 0, 0], visual: [7, 8.5, 9.5, 10], weight: 0.5 }, S.mblur()], tips: ['Install Sodium + Lithium (Fabric) first; it roughly doubles fps versus vanilla.', 'Allocate 4-6 GB of RAM to Java, not more.'] }),
+  G({ id: 'league', name: 'League of Legends', gpuMs: 1.2, cpuMs: 2.5, resExp: 0.65, vramBase: 1.5, vramPerMP: 0.2, upscalers: [], fg: false, settings: esports(), competitive: true }),
+  G({ id: 'rocket', name: 'Rocket League', gpuMs: 1.5, cpuMs: 2.2, resExp: 0.7, vramBase: 2.0, vramPerMP: 0.3, upscalers: [], fg: false, settings: esports(), competitive: true }),
+  G({ id: 'dota2', name: 'Dota 2', gpuMs: 2.0, cpuMs: 3.0, resExp: 0.7, vramBase: 2.5, vramPerMP: 0.3, upscalers: ['fsr'], fg: false, settings: esports(), competitive: true }),
+  G({ id: 'eldenring', name: 'Elden Ring / Nightreign', gpuMs: 3.5, cpuMs: 4.5, cap: 60, vramBase: 5.0, vramPerMP: 0.6, upscalers: [], fg: false, rt: RT.light, settings: std(S.foliage()), tips: ['Hard capped at 60 fps. Spend the GPU headroom on max settings or a higher resolution.', 'Ray tracing is expensive and visually subtle here.'] }),
+  G({ id: 'gta5', name: 'GTA V Enhanced', gpuMs: 3.5, cpuMs: 5.5, vramBase: 5.0, vramPerMP: 0.7, rt: RT.std, settings: std(S.foliage(), S.crowd()), tips: ['Grass and Extended Distance Scaling are the heavy ones.'] }),
+  G({ id: 'rdr2', name: 'Red Dead Redemption 2', gpuMs: 4.0, cpuMs: 5.0, resExp: 0.9, vramBase: 5.5, vramPerMP: 0.7, upscalers: ['dlss', 'fsr'], fg: false, settings: std(S.foliage(), S.water(), S.tess()), tips: ['Water Physics, Tree Tessellation, and Volumetrics are the 3 most expensive settings.'] }),
+  G({ id: 'hogwarts', name: 'Hogwarts Legacy', gpuMs: 5.5, cpuMs: 6.5, vramBase: 7.5, vramPerMP: 0.8, rt: RT.std, settings: std(S.foliage(), S.crowd()), tips: ['Hogsmeade is CPU bound on most systems; Population setting helps.'] }),
+  G({ id: 'starfield', name: 'Starfield', gpuMs: 6.5, cpuMs: 8.0, vramBase: 6.5, vramPerMP: 0.7, settings: std(S.crowd()), tips: ['New Atlantis is the CPU worst case. Crowd Density = Low adds 10-15% there.'] }),
+  G({ id: 'bg3', name: "Baldur's Gate 3", gpuMs: 4.5, cpuMs: 7.5, vramBase: 5.5, vramPerMP: 0.6, upscalers: ['dlss', 'fsr'], fg: true, settings: std(S.crowd()), tips: ["Act 3 (Baldur's Gate city) is CPU bound; use the Vulkan renderer on AMD/Intel, DX11 on NVIDIA."] }),
+  G({ id: 'alanwake2', name: 'Alan Wake 2', gpuMs: 7.5, cpuMs: 5.0, resExp: 0.9, vramBase: 6.5, vramPerMP: 0.8, rt: RT.heavy, settings: std(S.foliage(), S.hair()), tips: ['Requires mesh shaders (RTX 20 / RX 6000 or newer). Older cards run badly regardless of settings.'] }),
+  G({ id: 'wukong', name: 'Black Myth: Wukong (UE5)', gpuMs: 8.0, cpuMs: 5.0, resExp: 0.9, vramBase: 6.0, vramPerMP: 0.8, rt: RT.heavy, settings: ue5(S.hair()), tips: ['Built around upscaling: the game expects you to run 60-75% internal resolution.'] }),
+  G({ id: 'indy', name: 'Indiana Jones and the Great Circle', gpuMs: 6.0, cpuMs: 5.0, vramBase: 9.0, vramPerMP: 0.9, rt: RT.mandatoryPT, settings: std(S.hair(), S.foliage()), tips: ['VRAM is the hard limit: Texture Pool Size must fit in VRAM or the game refuses to run the preset.'] }),
+  G({ id: 'doomda', name: 'DOOM: The Dark Ages', gpuMs: 6.2, cpuMs: 4.5, vramBase: 7.5, vramPerMP: 0.8, rt: RT.mandatoryPT, settings: std(S.hair()) }),
+  G({ id: 'msfs', name: 'Microsoft Flight Simulator 2024', gpuMs: 7.0, cpuMs: 9.0, vramBase: 7.0, vramPerMP: 0.8, settings: std(S.draw(), S.vol(), S.crowd()), tips: ['Terrain Level of Detail and traffic sliders are CPU. Clouds and TLOD are the two to tune.', 'Frame Generation is almost mandatory for 100+ fps in dense cities.'] }),
+  G({ id: 'ac', name: 'Assetto Corsa (CSP + Pure/Sol)', gpuMs: 4.0, cpuMs: 4.5, vramBase: 4.5, vramPerMP: 0.6, upscalers: ['fsr'], fg: false, settings: std(S.crowd(), S.refl()), tips: ['Reflections (CSP cubemap resolution + faces per frame) and shadows dominate GPU. AI grid size dominates CPU.', 'Use the ac-graphics-tuner skill for a CSP/Pure specific pass.'] }),
+  G({ id: 'acc', name: 'Assetto Corsa Competizione', gpuMs: 5.5, cpuMs: 5.0, vramBase: 5.0, vramPerMP: 0.7, upscalers: ['dlss', 'fsr'], fg: false, settings: std(S.crowd(), S.foliage()), tips: ['Mirror resolution/view distance and Shadows are the expensive settings. Opponents visibility sets CPU load.'] }),
+  G({ id: 'fh5', name: 'Forza Horizon 5', gpuMs: 4.5, cpuMs: 5.0, vramBase: 6.0, vramPerMP: 0.7, rt: RT.light, settings: std(S.foliage(), S.crowd()), tips: ['Unlock the fps cap in Video settings; Extreme preset has a hidden MSAA cost.'] }),
+  G({ id: 'f125', name: 'F1 25', gpuMs: 5.0, cpuMs: 4.5, vramBase: 5.5, vramPerMP: 0.7, rt: RT.std, settings: std(S.crowd(), S.vol()), tips: ['Weather effects and mirrors are the heavy settings.'] }),
+  G({ id: 'mhwilds', name: 'Monster Hunter Wilds', gpuMs: 9.5, cpuMs: 8.5, resExp: 0.9, vramBase: 7.5, vramPerMP: 0.9, rt: RT.light, settings: std(S.foliage(), S.hair(), S.crowd()), tips: ['One of the heaviest games on both CPU and GPU. The game is designed around FG; recommend it when base fps is 55+.'] }),
+  G({ id: 'sm2', name: 'Warhammer 40,000: Space Marine 2', gpuMs: 5.5, cpuMs: 6.5, vramBase: 5.5, vramPerMP: 0.7, upscalers: ['dlss', 'fsr', 'xess'], fg: false, settings: std(S.crowd()), tips: ['Horde scenes are CPU-limited; Swarm Density is the CPU dial.'] }),
+  G({ id: 'stalker2', name: 'S.T.A.L.K.E.R. 2 (UE5)', gpuMs: 8.0, cpuMs: 8.0, resExp: 0.9, vramBase: 6.5, vramPerMP: 0.8, settings: ue5(S.hair()), tips: ['CPU bound in settlements regardless of settings.'] }),
+  G({ id: 'hfw', name: 'Horizon Forbidden West', gpuMs: 5.5, cpuMs: 5.0, vramBase: 6.5, vramPerMP: 0.8, settings: std(S.foliage(), S.hair(), S.water()) }),
+  G({ id: 'gowr', name: 'God of War Ragnarök', gpuMs: 5.0, cpuMs: 4.5, vramBase: 6.0, vramPerMP: 0.7, settings: std(S.foliage()) }),
+  G({ id: 'tlou', name: 'The Last of Us Part I / II', gpuMs: 6.0, cpuMs: 6.0, vramBase: 8.5, vramPerMP: 0.8, settings: std(S.foliage(), S.hair()), tips: ['Texture Quality is VRAM-bound: 8 GB cards must use High, not Ultra.'] }),
+  G({ id: 'spiderman2', name: "Marvel's Spider-Man 2", gpuMs: 5.5, cpuMs: 6.5, vramBase: 7.0, vramPerMP: 0.8, rt: RT.std, settings: std(S.crowd(), S.hair()), tips: ['Traffic and Crowd Density are the CPU dials. RT reflections cost CPU as well as GPU here.'] }),
+  G({ id: 'tsushima', name: 'Ghost of Tsushima', gpuMs: 4.5, cpuMs: 4.5, vramBase: 5.5, vramPerMP: 0.7, settings: std(S.foliage()) }),
+  G({ id: 'kcd2', name: 'Kingdom Come: Deliverance II', gpuMs: 5.0, cpuMs: 7.0, vramBase: 5.5, vramPerMP: 0.7, settings: std(S.foliage(), S.crowd(), S.draw()), tips: ['Kuttenberg is CPU bound; Object Quality and crowd distance help most.'] }),
+  G({ id: 'oblivion', name: 'Oblivion Remastered (UE5)', gpuMs: 9.0, cpuMs: 8.0, resExp: 0.9, vramBase: 7.0, vramPerMP: 0.8, rt: RT.light, settings: ue5(S.hair()), tips: ['Hardware Lumen (RT) is the biggest single cost. Software Lumen Low keeps most of the look.'] }),
+  G({ id: 'expedition33', name: 'Clair Obscur: Expedition 33 (UE5)', gpuMs: 6.0, cpuMs: 5.0, resExp: 0.88, vramBase: 6.0, vramPerMP: 0.7, settings: ue5() }),
+  G({ id: 'palworld', name: 'Palworld (UE5)', gpuMs: 5.0, cpuMs: 6.0, vramBase: 5.0, vramPerMP: 0.6, settings: ue5(S.aa()), tips: ['Large bases are CPU bound; lower Pal count/base objects before graphics.'] }),
+  G({ id: 'generic', name: 'Other game (calibrate with a measured fps)', gpuMs: 5.0, cpuMs: 5.0, vramBase: 5.5, vramPerMP: 0.7, settings: std(S.draw()), tips: ['For a game not in the list, enter one measured fps in the Calibration tab and the model scales to it.'] }),
+];
+
+export const GAME_BY_ID = Object.fromEntries(GAMES.map((x) => [x.id, x]));
+export const PRESETS = ['Low', 'Medium', 'High', 'Ultra'];

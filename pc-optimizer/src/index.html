@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup Optimizer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%234f8cff%27/%3E%3Cpath d=%27M8 20l5-8 4 5 3-3 4 6%27 stroke=%27white%27 stroke-width=%273%27 fill=%27none%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>Setup Optimizer</h1>
+  <nav>
+    <button data-tab="setup" class="active">1. Your setup</button>
+    <button data-tab="games">2. Game settings</button>
+    <button data-tab="overview">3. All games</button>
+    <button data-tab="calibrate">4. Calibrate</button>
+  </nav>
+  <div class="hdr-actions">
+    <button id="btnDetect" title="Reads the real hardware on this machine (desktop app only)">Detect my hardware</button>
+    <button id="btnExport">Export setup</button>
+    <label class="filebtn">Import<input type="file" id="fileImport" accept="application/json"></label>
+  </div>
+</header>
+
+<main>
+<section id="tab-setup" class="tab active">
+  <div class="grid2">
+    <div class="card">
+      <h2>Device</h2>
+      <label>Prebuilt / handheld / laptop preset<select id="device"><option value="">Custom build (enter parts below)</option></select></label>
+      <div id="deviceNotes" class="notes"></div>
+      <label id="powerModeWrap" hidden>Power mode / TDP<select id="powerMode"></select></label>
+      <label>CPU<input list="cpuList" id="cpu" placeholder="Start typing, e.g. 7800X3D"><datalist id="cpuList"></datalist></label>
+      <div class="row"><label>Custom CPU gaming index (if not in list, 9800X3D = 100)<input type="number" id="cpuIdx" min="5" max="130" step="1" placeholder="auto"></label><label>Cores<input type="number" id="cpuCores" min="2" max="64" placeholder="auto"></label></div>
+      <label>GPU<input list="gpuList" id="gpu" placeholder="Start typing, e.g. RTX 4070"><datalist id="gpuList"></datalist></label>
+      <div class="row"><label>Custom GPU index (4090 = 100)<input type="number" id="gpuIdx" min="1" max="200" step="1" placeholder="auto"></label><label>VRAM GB override<input type="number" id="vram" min="1" max="48" placeholder="auto"></label><label>iGPU VRAM allocation GB<input type="number" id="igpuVram" min="1" max="16" placeholder="4"></label></div>
+      <label>GPU connection<select id="pcie"></select></label>
+      <div class="row"><label>RAM (GB)<input type="number" id="ramGB" value="16" min="4" max="256"></label><label>Channels<select id="ramChannels"><option value="1">Single (1 stick)</option><option value="2" selected>Dual</option><option value="4">Quad / LPDDR</option></select></label><label>RAM type/speed<input id="ramType" placeholder="DDR5-6000"></label></div>
+      <label>Game drive<select id="storage"></select></label>
+      <div class="row"><label>Form factor<select id="form"><option value="desktop">Desktop</option><option value="laptop">Laptop</option><option value="handheld">Handheld</option></select></label><label>Laptop GPU mode<select id="laptopMode"></select></label><label><input type="checkbox" id="onBattery"> On battery</label></div>
+      <div class="row"><label>PSU watts (desktop)<input type="number" id="psuW" placeholder="750"></label><label>Case airflow / cooling<select id="cooling"><option value="good">Good</option><option value="poor">Poor / dusty / hot room</option></select></label></div>
+    </div>
+    <div class="card">
+      <h2>Monitors</h2>
+      <div id="monitors"></div>
+      <button id="addMonitor" class="small">+ Add monitor</button>
+      <h2>Peripherals &amp; connections</h2>
+      <div class="row"><label>Mouse connection<select id="mouseConn"></select></label><label>Mouse polling rate<select id="mousePolling"><option>125</option><option>500</option><option selected>1000</option><option>2000</option><option>4000</option><option>8000</option></select></label></div>
+      <div class="row"><label>Controller<select id="controllerConn"><option value="">None</option></select></label><label>Audio<select id="audioConn"></select></label></div>
+      <div class="row"><label>USB hub<select id="hubGen"></select></label><label>Devices on hub<input type="number" id="hubDevices" value="0" min="0" max="12"></label></div>
+      <div class="checks">
+        <label><input type="checkbox" id="mouseOnHub"> Mouse on hub</label>
+        <label><input type="checkbox" id="webcamOnHub"> Webcam on hub</label>
+        <label><input type="checkbox" id="audioInterface"> Audio interface</label>
+        <label><input type="checkbox" id="audioOnHub"> Audio via hub</label>
+        <label><input type="checkbox" id="captureCard"> Capture card</label>
+        <label><input type="checkbox" id="vrHeadset"> VR headset connected</label>
+      </div>
+      <label>Network<select id="network"></select></label>
+      <h2>Software running while gaming</h2>
+      <div class="checks">
+        <label><input type="checkbox" id="discordOverlay"> Discord overlay</label>
+        <label><input type="checkbox" id="browserVideo"> Browser video (YouTube/Twitch)</label>
+        <label><input type="checkbox" id="rgbSoftware"> RGB suite (iCUE/Synapse/Armoury)</label>
+      </div>
+      <label>Streaming / recording<select id="streaming"><option value="">None</option><option value="nvenc">OBS with NVENC / AMF / QSV (hardware)</option><option value="x264">OBS with x264 (software)</option></select></label>
+      <div id="setupWarnings" class="warnings"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-games" class="tab">
+  <div class="card controls">
+    <label>Game<select id="game"></select></label>
+    <label>Goal<select id="targetMode"></select></label>
+    <label id="targetFpsWrap" hidden>Target fps<input type="number" id="targetFps" value="90" min="20" max="600"></label>
+    <label>Render resolution<select id="res"></select></label>
+    <button id="btnRecommend" class="primary">Recommend settings</button>
+  </div>
+  <div id="goalDesc" class="notes"></div>
+  <div id="result"></div>
+</section>
+
+<section id="tab-overview" class="tab">
+  <div class="card controls"><label>Goal<select id="ovMode"></select></label><button id="btnOverview" class="primary">Run all games</button></div>
+  <div id="overview"></div>
+</section>
+
+<section id="tab-calibrate" class="tab">
+  <div class="card">
+    <h2>Calibrate to your real machine</h2>
+    <p>Run any game, note the average fps (use the in-game counter, Steam overlay, or MSI Afterburner over 1-2 minutes of normal play), then enter it here. The model rescales GPU and CPU performance to match. One measurement gets most of the gain; three different games is best.</p>
+    <div class="row">
+      <label>Game<select id="calGame"></select></label>
+      <label>Preset you ran<select id="calPreset"><option value="0">Low</option><option value="1">Medium</option><option value="2">High</option><option value="3" selected>Ultra / Epic</option></select></label>
+      <label>Resolution<select id="calRes"></select></label>
+    </div>
+    <div class="row">
+      <label>Upscaler<select id="calUp"><option value="native">Native</option><option value="quality">Quality</option><option value="balanced">Balanced</option><option value="performance">Performance</option></select></label>
+      <label>Ray tracing level<select id="calRt"></select></label>
+      <label>Frame gen<select id="calFg"><option value="off">Off</option><option value="fg2">On (2x)</option></select></label>
+      <label>Measured avg fps<input type="number" id="calFps" min="5" max="1000"></label>
+    </div>
+    <button id="btnCalibrate" class="primary">Apply calibration</button>
+    <button id="btnResetCal" class="small">Reset calibration</button>
+    <div id="calResult" class="notes"></div>
+  </div>
+</section>
+</main>
+<footer>Estimates use published benchmark averages. Uncalibrated error is about ±15%; calibrated about ±7%. Patches, drivers, scene, and thermals move real numbers.</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
