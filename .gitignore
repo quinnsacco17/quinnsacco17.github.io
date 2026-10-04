@@ -1,1 +1,5 @@
 node_modules
+pc-optimizer/dist
+pc-optimizer/node_modules
+vendor/PresentMon.exe
+vendor/PresentMon-LICENSE.txt

@@ -1,0 +1,77 @@
+{
+  "name": "setup-optimizer",
+  "productName": "Setup Optimizer",
+  "version": "0.2.0",
+  "description": "Enter your exact PC setup and get the best per-game settings for a target performance.",
+  "main": "electron/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/engine.test.js tests/apply.test.js tests/detect.test.js tests/handheld.test.js tests/accessories.test.js tests/speedtest.test.js tests/measure.test.js",
+    "dist:win": "electron-builder --win nsis portable --x64",
+    "dist:mac": "electron-builder --mac dmg --arm64 --x64",
+    "web": "npx http-server src -p 8080"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "systeminformation": "^5.23.0"
+  },
+  "build": {
+    "appId": "io.github.quinnsacco17.setupoptimizer",
+    "productName": "Setup Optimizer",
+    "files": [
+      "electron/**",
+      "src/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "vendor",
+          "to": "vendor",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
+  }
+}
