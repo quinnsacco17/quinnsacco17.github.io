@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quinn Sacco</title>
+<meta name="description" content="Quinn Sacco: builder of ORBIT and ORBIT Estates.">
+<meta name="theme-color" content="#05060d">
+<style>
+:root {
+  --bg: #05060d;
+  --fg: #e8ecff;
+  --muted: #8b93b8;
+  --a: #7c5cff;
+  --b: #19d3ff;
+  --c: #ff4fa3;
+  --card: rgba(255,255,255,.04);
+  --line: rgba(255,255,255,.1);
+}
+* { box-sizing: border-box; margin: 0; }
+html { scroll-behavior: smooth; overflow-x: clip; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+#stars { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; }
+.glow {
+  position: fixed; z-index: 0; pointer-events: none; border-radius: 50%; filter: blur(110px); opacity: .35;
+}
+.glow.one { width: 520px; height: 520px; background: var(--a); top: -160px; left: -120px; animation: drift 18s ease-in-out infinite alternate; }
+.glow.two { width: 460px; height: 460px; background: var(--b); bottom: -180px; right: -120px; animation: drift 22s ease-in-out infinite alternate-reverse; }
+@keyframes drift { to { transform: translate(80px, 60px) scale(1.15); } }
+
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px max(16px, 5vw);
+  backdrop-filter: blur(14px);
+  background: linear-gradient(to bottom, rgba(5,6,13,.8), transparent);
+}
+nav b { letter-spacing: .24em; font-size: 13px; }
+nav div { display: flex; gap: 22px; }
+nav a { color: var(--muted); text-decoration: none; font-size: 14px; transition: color .2s; }
+nav a:hover { color: var(--fg); }
+
+main { position: relative; z-index: 1; }
+section { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+.hero {
+  min-height: 100vh; display: grid; place-items: center; text-align: center; position: relative; overflow: hidden;
+}
+.rings { position: absolute; width: min(760px, 120vw); aspect-ratio: 1; display: grid; place-items: center; pointer-events: none; }
+.ring { position: absolute; border-radius: 50%; border: 1px solid var(--line); }
+.ring:nth-child(1) { width: 40%; height: 40%; animation: spin 24s linear infinite; }
+.ring:nth-child(2) { width: 68%; height: 68%; animation: spin 40s linear infinite reverse; }
+.ring:nth-child(3) { width: 100%; height: 100%; animation: spin 64s linear infinite; }
+.ring::after {
+  content: ""; position: absolute; top: -5px; left: 50%; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%;
+  background: var(--b); box-shadow: 0 0 18px 4px var(--b);
+}
+.ring:nth-child(2)::after { background: var(--c); box-shadow: 0 0 18px 4px var(--c); }
+.ring:nth-child(3)::after { background: var(--a); box-shadow: 0 0 18px 4px var(--a); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hero-inner { position: relative; padding: 120px 0 80px; }
+.tag {
+  display: inline-block; padding: 6px 14px; border: 1px solid var(--line); border-radius: 99px;
+  background: var(--card); color: var(--muted); font-size: 13px; letter-spacing: .06em; backdrop-filter: blur(8px);
+}
+.tag i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3dffa0; margin-right: 8px; box-shadow: 0 0 10px #3dffa0; animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+h1 {
+  font-size: clamp(48px, 11vw, 124px); line-height: 1; letter-spacing: -.04em; margin: 22px 0 18px; font-weight: 800;
+  background: linear-gradient(100deg, #fff 10%, var(--b) 40%, var(--a) 65%, var(--c) 95%);
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sheen 8s linear infinite;
+}
+@keyframes sheen { to { background-position: 200% center; } }
+.sub { color: var(--muted); font-size: clamp(16px, 2.2vw, 21px); max-width: 560px; margin: 0 auto 34px; }
+.sub span { color: var(--fg); }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  padding: 13px 26px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px;
+  border: 1px solid var(--line); color: var(--fg); background: var(--card); transition: transform .2s, box-shadow .2s, border-color .2s;
+}
+.btn:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.3); }
+.btn.primary { background: linear-gradient(120deg, var(--a), var(--b)); border: 0; color: #04050c; box-shadow: 0 8px 30px -8px var(--a); }
+.btn.primary:hover { box-shadow: 0 12px 40px -6px var(--b); }
+.scroll { position: absolute; bottom: 28px; left: 50%; width: 22px; height: 36px; margin-left: -11px; border: 2px solid var(--muted); border-radius: 12px; opacity: .6; }
+.scroll::after { content: ""; position: absolute; top: 6px; left: 50%; width: 3px; height: 7px; margin-left: -1.5px; border-radius: 2px; background: var(--muted); animation: wheel 1.6s infinite; }
+@keyframes wheel { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(12px); } }
+
+h2 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -.02em; margin-bottom: 8px; }
+.lead { color: var(--muted); margin-bottom: 36px; }
+.block { padding: 90px 16px 40px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
+.card {
+  position: relative; padding: 28px; border-radius: 18px; border: 1px solid var(--line); background: var(--card);
+  backdrop-filter: blur(10px); overflow: hidden; transition: transform .25s, border-color .25s;
+}
+.card::before {
+  content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), rgba(124,92,255,.22), transparent 60%);
+}
+.card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,.28); }
+.card:hover::before { opacity: 1; }
+.card > * { position: relative; }
+.ico { font-size: 28px; margin-bottom: 14px; }
+.card h3 { font-size: 20px; margin-bottom: 6px; }
+.card p { color: var(--muted); font-size: 15px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chips em { font-style: normal; font-size: 12px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 18px; padding: 40px 16px; text-align: center; }
+.stats b { display: block; font-size: clamp(34px, 5vw, 52px); font-weight: 800; background: linear-gradient(120deg, var(--b), var(--a)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stats span { color: var(--muted); font-size: 14px; }
+
+footer { position: relative; z-index: 1; text-align: center; padding: 70px 16px 50px; color: var(--muted); font-size: 14px; }
+footer a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--line); }
+
+.reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s, transform .7s; }
+.reveal.in { opacity: 1; transform: none; }
+
+@media (max-width: 560px) { nav div { gap: 14px; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="glow one"></div>
+<div class="glow two"></div>
+
+<nav>
+  <b>QS</b>
+  <div>
+    <a href="#projects">Projects</a>
+    <a href="#about">About</a>
+    <a href="https://github.com/quinnsacco17">GitHub</a>
+  </div>
+</nav>
+
+<main>
+  <section class="hero">
+    <div class="rings"><div class="ring"></div><div class="ring"></div><div class="ring"></div></div>
+    <div class="hero-inner">
+      <span class="tag"><i></i>Building in public, mostly at night</span>
+      <h1>Quinn Sacco</h1>
+      <p class="sub">I build <span>ORBIT</span>, a voice-run AI operating system, and <span>Estates</span>, a luxury sandbox game in Unreal.</p>
+      <div class="cta">
+        <a class="btn primary" href="#projects">See the work</a>
+        <a class="btn" href="https://github.com/quinnsacco17">GitHub</a>
+      </div>
+    </div>
+    <div class="scroll"></div>
+  </section>
+
+  <section class="block" id="projects">
+    <h2 class="reveal">Projects</h2>
+    <p class="lead reveal">What's in orbit right now.</p>
+    <div class="grid">
+      <article class="card reveal">
+        <div class="ico">🛰️</div>
+        <h3>ORBIT OS</h3>
+        <p>A personal operating system you talk to. Routes work across Claude, Codex, Gemini and more, runs study mode, controls the house, and speaks back.</p>
+        <div class="chips"><em>Node</em><em>Voice</em><em>Multi-agent</em><em>macOS</em></div>
+      </article>
+      <article class="card reveal">
+        <div class="ico">🏙️</div>
+        <h3>ORBIT Estates</h3>
+        <p>An Unreal Engine 5 world: private jet, chauffeured Rolls-Royce, penthouse, city drive. Built slice by slice by a crew of AI workers.</p>
+        <div class="chips"><em>Unreal 5</em><em>C++</em><em>3D</em></div>
+      </article>
+      <article class="card reveal">
+        <div class="ico">🎮</div>
+        <h3>Controller Skins</h3>
+        <p>Xbox One controller styling in pure CSS and sprites, with live button state for stream overlays.</p>
+        <div class="chips"><em>CSS</em><em>Gamepad API</em></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="stats reveal" id="about">
+    <div><b data-n="3">0</b><span>active builds</span></div>
+    <div><b data-n="24">0</b><span>hour agent lanes</span></div>
+    <div><b data-n="480">0</b><span>PRs shipped</span></div>
+    <div><b data-n="1">0</b><span>voice, hopefully working</span></div>
+  </section>
+</main>
+
+<footer>
+  <p>© <span id="y"></span> Quinn Sacco · <a href="https://github.com/quinnsacco17">github.com/quinnsacco17</a></p>
+</footer>
+
+<script>
+const c = document.getElementById('stars'), x = c.getContext('2d');
+let w, h, stars = [], mx = 0, my = 0;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function size() {
+  w = c.width = innerWidth * devicePixelRatio; h = c.height = innerHeight * devicePixelRatio;
+  stars = Array.from({ length: Math.min(260, Math.floor(innerWidth * innerHeight / 6000)) }, () => ({
+    x: Math.random() * w, y: Math.random() * h, z: Math.random() * 0.9 + 0.1, t: Math.random() * 6.28
+  }));
+}
+addEventListener('resize', size); size();
+addEventListener('pointermove', e => { mx = (e.clientX / innerWidth - .5); my = (e.clientY / innerHeight - .5); });
+function frame(ts) {
+  x.clearRect(0, 0, w, h);
+  for (const s of stars) {
+    s.y += s.z * .25 * devicePixelRatio;
+    if (s.y > h) { s.y = 0; s.x = Math.random() * w; }
+    const px = s.x - mx * s.z * 50 * devicePixelRatio, py = s.y - my * s.z * 50 * devicePixelRatio;
+    x.globalAlpha = .35 + .65 * Math.abs(Math.sin(ts / 900 + s.t));
+    x.fillStyle = s.z > .7 ? '#bfe9ff' : '#ffffff';
+    x.beginPath(); x.arc(px, py, s.z * 1.5 * devicePixelRatio, 0, 6.28); x.fill();
+  }
+  if (!reduce) requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return;
+  e.target.classList.add('in');
+  e.target.querySelectorAll('[data-n]').forEach(n => {
+    const to = +n.dataset.n, t0 = performance.now();
+    (function tick(t) {
+      const p = Math.min(1, (t - t0) / 1400);
+      n.textContent = Math.round(to * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(tick);
+    })(t0);
+  });
+  io.unobserve(e.target);
+}), { threshold: .15 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+document.querySelectorAll('.card').forEach(el => el.addEventListener('pointermove', e => {
+  const r = el.getBoundingClientRect();
+  el.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+  el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+}));
+document.getElementById('y').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>
