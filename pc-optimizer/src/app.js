@@ -461,7 +461,7 @@ function netCard() {
 /* ---------- First-run setup guide ---------- */
 const wiz = { step: 'welcome', type: null };
 function openWizard() { wiz.step = 'welcome'; $('wizard').hidden = false; document.body.classList.add('wiz-open'); renderWizard(); }
-function closeWizard() { setup.onboarded = true; saveSetup(); $('wizard').hidden = true; document.body.classList.remove('wiz-open'); writeAllFields(); renderMonitors(); fillRes(); refreshSetupWarnings(); renderGoalChips(); showView('games'); }
+function closeWizard() { setup.onboarded = true; setup.setupVersion = 2; saveSetup(); $('wizard').hidden = true; document.body.classList.remove('wiz-open'); writeAllFields(); renderMonitors(); fillRes(); refreshSetupWarnings(); renderGoalChips(); showView('games'); }
 function writeAllFields() { simpleFields.forEach((id) => writeField(id, setup[keyMap[id] || id])); periFields.forEach((id) => writeField(id, setup.peripherals[id])); bgFields.forEach((id) => writeField(id, setup.background[id])); $('device').value = setup.device || ''; applyDevice(false); }
 function tiles(items) { const g = el('div', { class: 'wiz-tiles' }); items.forEach(([label, sub, fn]) => g.append(el('button', { type: 'button', class: 'wiz-tile', onclick: fn }, el('strong', {}, label), sub ? el('span', {}, sub) : ''))); return g; }
 function wizScreen(title, sub, ...content) {
@@ -552,6 +552,6 @@ $('autoDetect').checked = setup.autoDetect !== false; $('autoDetect').onchange =
 $('btnExport').onclick = () => { const a = el('a', { href: 'data:application/json,' + encodeURIComponent(JSON.stringify(setup, null, 2)), download: 'my-setup.json' }); a.click(); };
 $('fileImport').onchange = async (ev) => { const f = ev.target.files[0]; if (!f) return; setup = { ...defaultSetup(), ...JSON.parse(await f.text()) }; saveSetup(); location.reload(); };
 initSetup(); initGames(); decorate(); renderGoalChips(); renderGameGrid();
-if (!setup.onboarded) openWizard();
+if (!setup.onboarded || (setup.setupVersion || 1) < 2) openWizard();
 else if (isDesktopApp && setup.autoDetect !== false) detect(true);
 window.__app = { engineSetup, setup: () => setup, runRecommend };
