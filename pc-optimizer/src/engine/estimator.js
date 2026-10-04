@@ -13,9 +13,9 @@ export const UPSCALE_MODES = [
 
 // Visual score (native = 10) per upscaler tech and mode.
 const UPSCALER_VISUAL = {
-  dlss4: { native: 10, dlaa: 10.6, quality: 9.7, balanced: 9.3, performance: 8.8, ultraperf: 7.4, overhead: 0.9 },
-  dlss3: { native: 10, dlaa: 10.4, quality: 9.4, balanced: 8.9, performance: 8.2, ultraperf: 6.6, overhead: 0.8 },
-  dlss2: { native: 10, dlaa: 10.3, quality: 9.3, balanced: 8.8, performance: 8.0, ultraperf: 6.4, overhead: 0.9 },
+  dlss4: { native: 10, dlaa: 10.6, quality: 9.7, balanced: 9.3, performance: 8.8, ultraperf: 7.4, overhead: 1.1 },
+  dlss3: { native: 10, dlaa: 10.4, quality: 9.4, balanced: 8.9, performance: 8.2, ultraperf: 6.6, overhead: 0.6 },
+  dlss2: { native: 10, dlaa: 10.3, quality: 9.3, balanced: 8.8, performance: 8.0, ultraperf: 6.4, overhead: 0.7 },
   fsr4: { native: 10, dlaa: 10.3, quality: 9.4, balanced: 8.9, performance: 8.2, ultraperf: 6.8, overhead: 1.2 },
   fsr3: { native: 10, dlaa: 10.0, quality: 8.5, balanced: 7.7, performance: 6.8, ultraperf: 5.0, overhead: 0.8 },
   xessXMX: { native: 10, dlaa: 10.2, quality: 9.1, balanced: 8.6, performance: 7.8, ultraperf: 6.2, overhead: 1.0 },
@@ -34,10 +34,10 @@ export function upscalerVisual(tech, modeId) { return (UPSCALER_VISUAL[tech] || 
 export function fgOptions(gpu, game) {
   if (!game.fg) return [{ id: 'off', name: 'Off', mult: 1 }];
   const o = [{ id: 'off', name: 'Off', mult: 1 }];
-  if (gpu.fg === 'mfg') o.push({ id: 'fg2', name: 'DLSS Frame Gen 2x', mult: 1.85, overhead: 1.3 }, { id: 'fg3', name: 'DLSS Multi Frame Gen 3x', mult: 2.65, overhead: 1.5 }, { id: 'fg4', name: 'DLSS Multi Frame Gen 4x', mult: 3.4, overhead: 1.7 });
-  else if (gpu.fg === 'dlss3') o.push({ id: 'fg2', name: 'DLSS Frame Gen 2x', mult: 1.8, overhead: 1.5 });
+  if (gpu.fg === 'mfg') o.push({ id: 'fg2', name: 'DLSS Frame Gen 2x', mult: 1.83, overhead: 2.0 }, { id: 'fg3', name: 'DLSS Multi Frame Gen 3x', mult: 2.64, overhead: 2.9 }, { id: 'fg4', name: 'DLSS Multi Frame Gen 4x', mult: 3.38, overhead: 3.9 });
+  else if (gpu.fg === 'dlss3') o.push({ id: 'fg2', name: 'DLSS Frame Gen 2x', mult: 1.75, overhead: 2.8 });
   else if (gpu.fg === 'xess2') o.push({ id: 'fg2', name: 'XeSS Frame Gen 2x', mult: 1.75, overhead: 1.8 });
-  else o.push({ id: 'fg2', name: 'FSR Frame Gen 2x', mult: 1.75, overhead: 2.0 });
+  else o.push({ id: 'fg2', name: 'FSR Frame Gen 2x', mult: 1.8, overhead: 1.5 });
   return o;
 }
 
