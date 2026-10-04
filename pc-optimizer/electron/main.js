@@ -29,13 +29,13 @@ function createWindow() {
           const click = (sel, text) => { const el = [...document.querySelectorAll(sel)].find((e) => !text || e.textContent.includes(text)); if (!el) throw new Error('missing ' + sel + ' ' + (text || '')); el.click(); };
           const out = { wizardOpen: !document.getElementById('wizard').hidden };
           await sleep(6000); out.afterScan = document.querySelector('.wiz-card h1')?.textContent; out.found = document.querySelector('.wiz-found')?.textContent;
-          click('.wiz-buttons button', 'pick'); await sleep(100); click('.wiz-tile', 'Handheld'); await sleep(100); click('.wiz-tile', 'Z1 Extreme'); await sleep(100);
-          click('.wiz-tile', 'Turbo (25W'); await sleep(100); click('.wiz-tile', 'Smoothest'); await sleep(100); click('button', 'Show me my games'); await sleep(200);
+          if ([...document.querySelectorAll('.wiz-buttons button')].some((b) => b.textContent.includes('pick'))) { click('.wiz-buttons button', 'pick'); await sleep(100); } click('.wiz-tile', 'Handheld'); await sleep(100); click('.wiz-tile', 'Z1 Extreme'); await sleep(100);
+          click('.wiz-tile', 'Turbo (25W'); await sleep(100); click('.wiz-tile', 'On its own screen'); await sleep(100); click('.wiz-tile', 'came with it'); await sleep(100); click('.wiz-tile', 'No'); await sleep(100); click('.wiz-tile', 'Smoothest'); await sleep(100); click('button', 'Show me my games'); await sleep(200);
           out.wizardClosed = document.getElementById('wizard').hidden; out.tiles = document.querySelectorAll('.game-tile').length;
           click('.game-tile', 'Cyberpunk'); await sleep(300);
           out.hero = document.querySelector('.hero-fps')?.textContent; out.status = document.querySelector('.status')?.textContent; out.applyBtn = !![...document.querySelectorAll('button')].find((b) => b.textContent === 'Apply to game');
           click('.mainnav button', 'My setup'); await sleep(200); out.summaryDevice = document.querySelector('.summary-card .set-row strong')?.textContent;
-          out.openBogus = (await window.optimizer.open('rm -rf')).ok; out.searchUnknown = (await window.optimizer.open('monitor-specs', 'evil')).ok;
+          out.measureAvailable = await window.optimizer.measureAvailable(); out.measureOnLinux = (await window.optimizer.measure({})).error; out.openBogus = (await window.optimizer.open('rm -rf')).ok; out.searchUnknown = (await window.optimizer.open('monitor-specs', 'evil')).ok;
           return out; })()`);
         console.log('SMOKE', JSON.stringify(r2));
       } catch (e) { console.log('SMOKE_ERROR', e.message); }
