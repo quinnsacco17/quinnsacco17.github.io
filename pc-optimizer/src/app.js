@@ -157,12 +157,12 @@ function renderResult(rec, game, es) {
   const hero = el('div', { class: 'hero' },
     el('button', { class: 'back', type: 'button', onclick: () => { r.innerHTML = ''; $('gamesHome').hidden = false; } }, '← All games'),
     el('div', { class: 'hero-title' }, game.name),
-    el('div', { class: 'hero-fps' }, numEl, el('span', { class: 'unit' }, 'fps average')), statusEl, subEl);
+    el('div', { class: 'hero-fps' }, numEl, el('span', { class: 'unit' }, 'fps average'), (setup.gameCal || {})[game.id] ? el('span', { class: 'gt-badge static' }, 'Calibrated to your device') : ''), statusEl, subEl);
   const actions = el('div', { class: 'hero-actions' });
   const canApply = isDesktopApp && APPLY_SUPPORTED.includes(game.id);
   if (canApply) actions.append(el('button', { class: 'big primary', type: 'button', onclick: () => applyToGame(game, live, { ...b, up: live.upscaler, fg: fgs.find((f) => f.id === live.fg) || b.fg }, rec) }, 'Apply to game'));
   actions.append(el('button', { class: 'big' + (canApply ? '' : ' primary'), type: 'button', onclick: () => copyText(settingsText(game, live, { ...b, up: live.upscaler, fg: fgs.find((f) => f.id === live.fg) || b.fg }, estimate(es, game, live), rec)) }, 'Copy settings'));
-  if (isDesktopApp && process_isWin()) actions.append(el('button', { class: 'big', type: 'button', onclick: () => measureFlow(game, live, es, rec) }, 'Measure my real fps'));
+  actions.append(el('button', { class: 'big', type: 'button', onclick: () => measureFlow(game, live, es, rec) }, (setup.gameCal || {})[game.id] ? 'Measure again' : (isDesktopApp && process_isWin() ? 'Measure my real fps' : 'Enter my real fps')));
   hero.append(actions);
   if (!canApply) hero.append(el('div', { class: 'notes' }, isDesktopApp ? 'This game stores settings where the app can’t write them. Set these in the game’s menu.' : 'Set these in the game’s menu.'));
   if (rec.lockConflict) hero.append(el('div', { class: 'tip warn' }, 'Your pinned settings couldn’t all be kept together, so pins were ignored for this result.'));
@@ -326,7 +326,37 @@ function showView(id) { document.querySelectorAll('.mainnav button').forEach((b)
 document.querySelectorAll('.subnav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 document.querySelectorAll('.mainnav button').forEach((b) => b.onclick = () => showView(b.dataset.view));
 
-function measureFlow() { alert('Coming in this release.'); }
+function applyMeasurement(game, live, measured, low1, app) {
+  const es = engineSetup();
+  const predicted = estimate({ ...es, _noGameCal: true, calibration: null }, game, live).fps;
+  const cfg = { settings: [...live.settings], rtIndex: live.rtIndex || 0, upscalerTech: live.upscaler && live.mode !== 'native' ? live.upscaler.tech : null, mode: live.upscaler ? live.mode : 'native', fg: live.fg || 'off', w: live.w, h: live.h };
+  setup.calibration = calibrate(es, game, { ...cfg, upscaler: cfg.upscalerTech ? { tech: cfg.upscalerTech } : null }, measured);
+  (setup.gameCal ||= {})[game.id] = { measured, low1: low1 || null, app: app || null, config: cfg, at: new Date().toISOString(), predicted };
+  saveSetup();
+  return predicted;
+}
+function measureFlow(game, live, es, rec) {
+  const overlay = el('div', { class: 'modal' }); const card = el('div', { class: 'modal-card' }); overlay.append(card); document.body.append(overlay);
+  const close = () => overlay.remove();
+  const done = (measured, low1, app) => { const predicted = applyMeasurement(game, live, measured, low1, app); card.innerHTML = ''; card.append(el('h2', {}, 'Got it'), el('p', {}, `Measured ${fmt(measured)} fps${low1 ? ` (1% lows ${fmt(low1)})` : ''}${app ? ` in ${app}` : ''}. The estimate was ${fmt(predicted)}.`), el('p', { class: 'notes' }, `${game.name} now uses your real result, and every other game’s estimate was adjusted for your device.`), el('div', { class: 'row' }, el('button', { class: 'big primary', type: 'button', onclick: () => { close(); runRecommend(); } }, 'See updated settings'))); };
+  const manual = el('div', { class: 'row' }); const inp = el('input', { type: 'number', min: 5, max: 1000, placeholder: 'Average fps you saw' });
+  manual.append(inp, el('button', { class: 'small', type: 'button', onclick: () => { if (!(+inp.value > 0)) return; done(+inp.value); } }, 'Use this number'));
+  const start = el('button', { class: 'big primary', type: 'button' }, 'Start measuring');
+  if (!(isDesktopApp && process_isWin())) { card.append(el('h2', {}, `Your real fps in ${game.name}`), el('p', { class: 'notes' }, 'Turn on an fps counter (Steam overlay, NVIDIA Alt+R, AMD Ctrl+Shift+O, or Xbox Game Bar), play 1-2 minutes with the settings on this screen, then enter the average.'), manual, el('div', { class: 'row' }, el('button', { class: 'big', type: 'button', onclick: close }, 'Cancel'))); return; }
+  card.append(el('h2', {}, `Measure your real fps in ${game.name}`),
+    el('ol', { class: 'steps' }, el('li', {}, 'Set the game to the settings on this screen (or press Apply to game first).'), el('li', {}, 'Start the game and load into normal gameplay, not a menu.'), el('li', {}, 'Come back, press Start, and approve the Windows prompt. Then switch to the game within 10 seconds and play normally for 60 seconds.'), el('li', {}, 'This app comes back on its own when it’s done.')),
+    el('div', { class: 'row' }, start, el('button', { class: 'big', type: 'button', onclick: close }, 'Cancel')),
+    el('details', { class: 'subtle' }, el('summary', {}, 'Or type the fps you saw from an fps counter'), manual));
+  start.onclick = async () => {
+    if (!(await window.optimizer.measureAvailable())) { alert('The fps tool is missing from this build. Type the fps instead.'); return; }
+    start.disabled = true; let t = 70; start.textContent = 'Switch to the game now…';
+    const timer = setInterval(() => { t--; start.textContent = t > 60 ? `Switch to the game now… ${t - 60}` : `Measuring… ${Math.max(0, t)} s left`; }, 1000);
+    const r = await window.optimizer.measure({ seconds: 60, lead: 10 });
+    clearInterval(timer); start.disabled = false; start.textContent = 'Start measuring';
+    if (!r.ok) { alert(r.error); return; }
+    done(r.avgFps, r.low1Fps, r.app);
+  };
+}
 
 /* ---------- Simple games home ---------- */
 const GOALS = [

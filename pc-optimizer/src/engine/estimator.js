@@ -177,6 +177,9 @@ export function estimate(setup, game, config) {
   // Fixed per-frame GPU cost (present, UI, composition): keeps light games from scaling absurdly.
   gpuMs += 0.25 * (100 / gpuEff);
   let cpuMs = game.cpuMs * cpuMult * (100 / cpuEff);
+  const gc = setup.gameCal && setup.gameCal[game.id];
+  const gameRatio = gc && !setup._noGameCal ? gameCalRatio(setup, game, gc) : 1;
+  gpuMs /= gameRatio; cpuMs /= gameRatio;
   // RT BVH/driver overhead lands on CPU as well on NVIDIA less, AMD more
   // Blend: near the crossover both contribute.
   const p = 5;
@@ -202,10 +205,10 @@ export function estimate(setup, game, config) {
   }
   let lowsFps = fps * lows;
   if (game.cap) { fps = Math.min(fps, game.cap); lowsFps = Math.min(lowsFps, game.cap); }
-  const uncertainty = setup.calibration ? 0.07 : 0.14;
+  const uncertainty = gameRatio !== 1 ? 0.05 : setup.calibration ? 0.07 : 0.14;
   return {
     fps, baseFps, lows: lowsFps, gpuMs, cpuMs, frameMs, bottleneck: gpuBound ? 'GPU' : cpuBound ? 'CPU' : 'Balanced', vram, vramAvail, vramOver, fgNote, capped: game.cap && fps >= game.cap - 0.5,
-    range: [fps * (1 - uncertainty), fps * (1 + uncertainty)], uncertainty, factors: f, gpu, cpu,
+    range: [fps * (1 - uncertainty), fps * (1 + uncertainty)], uncertainty, factors: f, gpu, cpu, gameCalibrated: gameRatio !== 1,
   };
 }
 
@@ -217,4 +220,17 @@ export function visualScore(game, config, upscalerTech) {
   const um = config.mode || 'native';
   const uv = upscalerTech ? upscalerVisual(upscalerTech, um) : (um === 'native' ? 10 : 7);
   return base * (uv / 10);
+}
+
+// Per-game correction from a real measurement: measured fps / what the model predicts for the measured config.
+const gameCalCache = new Map();
+function gameCalRatio(setup, game, gc) {
+  const key = JSON.stringify([game.id, gc, setup.calibration, setup.powerMode && setup.powerMode.name, setup.gpu, setup.cpu, setup.gpuBonus, setup.cpuBonus, setup.ramChannels, setup.storage]);
+  if (gameCalCache.has(key)) return gameCalCache.get(key);
+  const cfg = { ...gc.config, upscaler: gc.config.upscalerTech ? { tech: gc.config.upscalerTech } : null };
+  const pred = estimate({ ...setup, _noGameCal: true }, game, cfg).fps;
+  const ratio = Math.max(0.4, Math.min(2.5, gc.measured / pred));
+  if (gameCalCache.size > 500) gameCalCache.clear();
+  gameCalCache.set(key, ratio);
+  return ratio;
 }

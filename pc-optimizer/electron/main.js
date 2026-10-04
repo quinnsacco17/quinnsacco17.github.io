@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { detectHardware } from './detect.js';
 import { applySettings, describeTarget } from './apply.js';
 import { speedTest } from './speedtest.js';
+import { measure, presentMonPath } from './presentmon.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,6 +68,16 @@ app.whenReady().then(() => {
     const hw = await detectHardware();
     lastDetected = new Set([...(hw.graphics?.displays || []).map((d) => d.model), `${hw.system?.manufacturer || ''} ${hw.system?.model || ''}`.trim()].filter(Boolean));
     return hw;
+  });
+  ipcMain.handle('measure-available', () => process.platform === 'win32' && !!presentMonPath(path.join(__dirname, '..')));
+  ipcMain.handle('measure', async (ev, opts) => {
+    if (process.platform !== 'win32') return { ok: false, error: 'Measuring needs Windows.' };
+    const exe = presentMonPath(path.join(__dirname, '..'));
+    if (!exe) return { ok: false, error: 'PresentMon is missing from this build. Type the fps you saw instead.' };
+    const seconds = Math.min(180, Math.max(20, +opts?.seconds || 60)), lead = Math.min(30, Math.max(5, +opts?.lead || 10));
+    const r = await measure(exe, { seconds, lead });
+    const w = BrowserWindow.fromWebContents(ev.sender); if (w) { w.show(); w.focus(); w.flashFrame(true); }
+    return r;
   });
   ipcMain.handle('speedtest', async (ev) => { try { return { ok: true, ...(await speedTest((p) => ev.sender.send('speedtest-progress', p))) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('open', async (ev, target, arg) => {

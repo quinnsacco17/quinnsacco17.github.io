@@ -160,7 +160,7 @@ export function frameCapAdvice(setup, est, mon, game, competitive) {
 
 // Calibrate: measured fps at known config
 export function calibrate(setup, game, config, measuredFps) {
-  const clean = { ...setup, calibration: null };
+  const clean = { ...setup, calibration: null, _noGameCal: true };
   const e = estimate(clean, game, config);
   const ratio = measuredFps / e.fps;
   let gf = 1, cf = 1;

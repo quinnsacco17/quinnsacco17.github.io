@@ -84,3 +84,4 @@ body.wiz-open{overflow:hidden}
 #setupSummary{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}#setupSummary .summary-card{max-width:none}#setupSummary .set-row select{width:auto;max-width:60%}
 .mode-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
 .net-advice .tip{margin:8px 0}
+.gt-badge.static{position:static;align-self:center;margin-left:8px}ol.steps{margin:8px 0 14px 20px;padding:0;line-height:1.5}ol.steps li{margin:4px 0}

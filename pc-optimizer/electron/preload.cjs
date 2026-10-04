@@ -4,5 +4,7 @@ contextBridge.exposeInMainWorld('optimizer', {
   detect: () => ipcRenderer.invoke('detect'),
   applySettings: (gameId, values) => ipcRenderer.invoke('apply', gameId, values),
   open: (target, arg) => ipcRenderer.invoke('open', target, arg),
+  measureAvailable: () => ipcRenderer.invoke('measure-available'),
+  measure: (opts) => ipcRenderer.invoke('measure', opts),
   speedTest: (onProgress) => { const h = (e, p) => onProgress && onProgress(p); ipcRenderer.on('speedtest-progress', h); return ipcRenderer.invoke('speedtest').finally(() => ipcRenderer.removeListener('speedtest-progress', h)); },
 });
