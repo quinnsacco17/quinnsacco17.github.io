@@ -38,3 +38,36 @@ export const AUDIO_CONN = [
 export const LAPTOP_GPU_MODE = [
   { id: 'mux', name: 'dGPU direct / MUX switch (Ultimate mode)', gpu: 1.0 }, { id: 'optimus', name: 'Hybrid / Optimus (iGPU drives the panel)', gpu: 0.94, note: 'Hybrid mode routes frames through the iGPU: ~5% fps and 3-8 ms latency.' }, { id: 'advanced-optimus', name: 'Advanced Optimus (auto-switching)', gpu: 0.99 }, { id: 'external', name: 'External monitor on the dGPU port', gpu: 1.0 },
 ];
+
+// Docks and hubs: the video link they give an external screen, whether they add wired Ethernet,
+// and how many watts they pass through to the device (after the dock's own draw).
+export const DOCKS = [
+  { id: 'none', name: 'No dock' },
+  { id: 'direct', name: 'USB-C straight to the monitor or TV (cable or adapter)', link: 'USB-C-DP1.4-4lane', passW: 0 },
+  { id: 'rog-charger-dock', name: 'ROG Gaming Charger Dock', link: 'HDMI2.0', ethernet: false, passW: 50, note: 'HDMI 2.0: 4K at 60 Hz or 1440p/1080p at up to 120 Hz.' },
+  { id: 'steam-deck-dock', name: 'Steam Deck Dock (official)', link: 'DP1.4', ethernet: true, passW: 35, note: 'DisplayPort 1.4 and HDMI 2.0 outputs, gigabit Ethernet.' },
+  { id: 'usbc-hdmi21', name: 'USB-C dock with HDMI 2.1 or DisplayPort 1.4 (4K 120 Hz capable)', link: 'USB-C-DP1.4-4lane', ethernet: true, passW: 85, note: 'Only reaches 4K 120 Hz if the dock uses all 4 DisplayPort lanes (no USB 3 data) or DSC.' },
+  { id: 'usbc-hdmi20', name: 'USB-C hub or dock with HDMI 2.0 (most JSAUX, Anker, UGREEN)', link: 'HDMI2.0', ethernet: true, passW: 85, note: 'HDMI 2.0: 4K at 60 Hz max, 1080p up to 120-144 Hz.' },
+  { id: 'usbc-hdmi14', name: 'Cheap USB-C hub (HDMI 1.4, 4K at 30 Hz)', link: 'HDMI1.4', ethernet: false, passW: 60, note: 'HDMI 1.4: 4K only at 30 Hz, 1080p at 60-120 Hz. Upgrading the hub is the fix.' },
+  { id: 'tb-dock', name: 'Thunderbolt 4 / USB4 dock', link: 'DP1.4', ethernet: true, passW: 85 },
+];
+export const CHARGERS = [
+  { id: 'stock', name: 'The charger that came with it' },
+  { id: '30', name: '30 W or less (phone charger)', w: 30 },
+  { id: '45', name: '45 W', w: 45 },
+  { id: '65', name: '65 W', w: 65 },
+  { id: '100', name: '100 W or more', w: 100 },
+];
+// External GPUs. gpu must exist in the GPU database. link maps to a PCIE id.
+export const EGPUS = [
+  { id: 'none', name: 'No external GPU' },
+  { id: 'xgm-4090', name: 'ASUS ROG XG Mobile (RTX 4090)', gpu: 'NVIDIA GeForce RTX 4090 Laptop', link: 'pcie4x8', port: 'xgm' },
+  { id: 'xgm-4080', name: 'ASUS ROG XG Mobile (RTX 4080)', gpu: 'NVIDIA GeForce RTX 4080 Laptop', link: 'pcie4x8', port: 'xgm' },
+  { id: 'xgm-3080', name: 'ASUS ROG XG Mobile (RTX 3080, 2021)', gpu: 'NVIDIA GeForce RTX 3080 Laptop', link: 'pcie3x8', port: 'xgm' },
+  { id: 'xgm-6850m', name: 'ASUS ROG XG Mobile (RX 6850M XT)', gpu: 'AMD Radeon RX 6800M Laptop', link: 'pcie3x8', port: 'xgm' },
+  { id: 'xgm-5090-tb5', name: 'ASUS ROG XG Mobile 2025 (RTX 5090, Thunderbolt 5)', gpu: 'NVIDIA GeForce RTX 5090 Laptop', link: 'tb5', port: 'usb4' },
+  { id: 'custom', name: 'Other eGPU enclosure (pick the card and connection)' },
+];
+export const EGPU_LINKS = [
+  { id: 'tb3', name: 'Thunderbolt 3' }, { id: 'tb4', name: 'Thunderbolt 4 / USB4' }, { id: 'tb5', name: 'Thunderbolt 5' }, { id: 'pcie4x4', name: 'OCuLink (PCIe 4.0 x4)' }, { id: 'pcie3x4', name: 'OCuLink (PCIe 3.0 x4) or M.2 adapter' },
+];

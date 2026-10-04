@@ -3,11 +3,12 @@ import { CPUS } from './engine/data/cpus.js';
 import { GAMES, GAME_BY_ID } from './engine/data/games.js';
 import { DEVICES, DEVICE_BY_ID } from './engine/data/devices.js';
 import { LINKS, COMMON_RES, REFRESH } from './engine/data/displays.js';
-import { PCIE, STORAGE, NETWORK, USB_HUB, MOUSE_CONN, CONTROLLER_CONN, AUDIO_CONN, LAPTOP_GPU_MODE } from './engine/data/connections.js';
-import { estimate, systemFactors, displayChecks, resolveGpu, resolveCpu, availableUpscalers, fgOptions, UPSCALE_MODES } from './engine/estimator.js';
+import { PCIE, STORAGE, NETWORK, USB_HUB, MOUSE_CONN, CONTROLLER_CONN, AUDIO_CONN, LAPTOP_GPU_MODE, DOCKS, CHARGERS, EGPUS, EGPU_LINKS } from './engine/data/connections.js';
+import { estimate, systemFactors, displayChecks, resolveGpu, resolveCpu, availableUpscalers, fgOptions, primaryMonitor, UPSCALE_MODES } from './engine/estimator.js';
 import { recommend, TARGET_MODES, baseConfig, calibrate } from './engine/recommender.js';
 import { renderPreview, SETTING_EXPLAIN } from './preview.js';
 import { matchHardware } from './engine/match.js';
+import { buildEngineSetup } from './engine/setup.js';
 import { HELP, helpBlock, measureBlock, pollingTester, runAction } from './assist.js';
 
 const $ = (id) => document.getElementById(id);
@@ -22,29 +23,13 @@ function defaultSetup() {
   return { device: '', cpu: '', gpu: '', ramGB: 16, ramChannels: 2, ramType: 'DDR5-6000', storage: 'nvme4', pcie: 'pcie4x16', form: 'desktop', laptopMode: 'mux', onBattery: false, psuW: '', cooling: 'good', igpuVramGB: 4,
     monitors: [{ w: 1920, h: 1080, hz: 144, vrr: true, vrrType: 'freesync', hdr: false, link: 'DP1.4', dsc: true, video: false }],
     peripherals: { mouseConn: 'wired', mousePolling: 1000, mouseOnHub: false, controllerConn: '', audioConn: 'motherboard', hubGen: 'none', hubDevices: 0, webcamOnHub: false, audioInterface: false, audioOnHub: false, captureCard: false, vrHeadset: false },
-    network: 'eth1', background: { discordOverlay: true, browserVideo: false, rgbSoftware: false, streaming: '' }, calibration: null, manual: [], autoFields: [], hints: {}, autoDetect: true, systemName: '' };
+    playMode: 'handheld', dock: 'none', charger: 'stock', dockEthernet: false, egpu: 'none', egpuGpu: '', egpuLink: 'tb4', egpuInternal: false, network: 'eth1', background: { discordOverlay: true, browserVideo: false, rgbSoftware: false, streaming: '' }, calibration: null, manual: [], autoFields: [], hints: {}, autoDetect: true, systemName: '' };
 }
 function loadSetup() { try { const s = JSON.parse(localStorage.getItem('setup') || 'null'); return s ? { ...defaultSetup(), ...s } : defaultSetup(); } catch { return defaultSetup(); } }
 function saveSetup() { localStorage.setItem('setup', JSON.stringify(setup)); }
 
 // Build the setup object the engine consumes (device presets + connection multipliers folded in)
-export function engineSetup(s = setup) {
-  const e = { ...s, peripherals: { ...s.peripherals }, background: { ...s.background } };
-  const d = s.device ? DEVICE_BY_ID[s.device] : null;
-  if (d) {
-    if (d.cpuIdx) e.cpuIdxOverride = d.cpuIdx; if (d.gpuIdx) e.gpuIdxOverride = d.gpuIdx;
-    if (d.gpuBonus) e.gpuBonus = d.gpuBonus; if (d.cpuBonus) e.cpuBonus = d.cpuBonus;
-    if (d.powerModes) e.powerMode = d.powerModes[s.powerModeIdx ?? d.defaultPower] || d.powerModes[d.defaultPower];
-  }
-  if (s.cpuIdx) e.cpuIdxOverride = +s.cpuIdx; if (s.gpuIdx) e.gpuIdxOverride = +s.gpuIdx; if (s.vram) e.vramOverride = +s.vram; if (s.cpuCores) e.cpuCores = +s.cpuCores;
-  const pc = PCIE.find((p) => p.id === s.pcie); if (pc) e.gpuBonus = (e.gpuBonus || 1) * pc.gpu;
-  if (s.form === 'laptop') e.laptopMux = s.laptopMode === 'optimus' ? 'optimus' : null;
-  const st = STORAGE.find((x) => x.id === s.storage); e.storage = st && st.id === 'hdd' ? 'hdd' : s.storage;
-  e.psuW = s.form === 'desktop' && s.psuW ? +s.psuW : null;
-  e.igpuVramGB = +s.igpuVramGB || 4;
-  e.peripherals.mousePolling = +s.peripherals.mousePolling;
-  return e;
-}
+export function engineSetup(s = setup) { return buildEngineSetup(s); }
 
 /* ---------- Setup tab ---------- */
 function fillSelect(sel, items, val, labelFn = (x) => x.name, valFn = (x) => x.id) { sel.innerHTML = ''; items.forEach((it) => sel.append(el('option', { value: valFn(it) }, labelFn(it)))); if (val != null) sel.value = val; }
@@ -52,13 +37,14 @@ function initSetup() {
   $('cpuList').append(...CPUS.map((c) => el('option', { value: c.name })));
   $('gpuList').append(...GPUS.map((g) => el('option', { value: g.name })));
   const dev = $('device'); DEVICES.forEach((d) => dev.append(el('option', { value: d.id }, `${d.name}`)));
+  fillSelect($('dock'), DOCKS, setup.dock || 'none'); fillSelect($('charger'), CHARGERS, setup.charger || 'stock'); fillSelect($('egpu'), EGPUS, setup.egpu || 'none'); fillSelect($('egpuLink'), EGPU_LINKS, setup.egpuLink || 'tb4');
   fillSelect($('pcie'), PCIE, setup.pcie); fillSelect($('storage'), STORAGE, setup.storage); fillSelect($('network'), NETWORK, setup.network);
   fillSelect($('laptopMode'), LAPTOP_GPU_MODE, setup.laptopMode); fillSelect($('mouseConn'), MOUSE_CONN, setup.peripherals.mouseConn); fillSelect($('audioConn'), AUDIO_CONN, setup.peripherals.audioConn); fillSelect($('hubGen'), USB_HUB, setup.peripherals.hubGen);
   const cc = $('controllerConn'); CONTROLLER_CONN.forEach((c) => cc.append(el('option', { value: c.id }, c.name)));
   bindSetupFields(); renderMonitors(); applyDevice(false); refreshSetupWarnings();
   $('addMonitor').onclick = () => { setup.monitors.push({ w: 1920, h: 1080, hz: 60, vrr: false, hdr: false, link: 'HDMI2.0', dsc: false, video: true }); renderMonitors(); saveSetup(); refreshSetupWarnings(); };
 }
-const simpleFields = ['cpu', 'gpu', 'cpuIdx', 'cpuCores', 'gpuIdx', 'vram', 'igpuVram', 'pcie', 'ramGB', 'ramChannels', 'ramType', 'storage', 'form', 'laptopMode', 'onBattery', 'psuW', 'cooling', 'network'];
+const simpleFields = ['playMode', 'dock', 'charger', 'dockEthernet', 'egpu', 'egpuGpu', 'egpuLink', 'egpuInternal', 'cpu', 'gpu', 'cpuIdx', 'cpuCores', 'gpuIdx', 'vram', 'igpuVram', 'pcie', 'ramGB', 'ramChannels', 'ramType', 'storage', 'form', 'laptopMode', 'onBattery', 'psuW', 'cooling', 'network'];
 const periFields = ['mouseConn', 'mousePolling', 'mouseOnHub', 'controllerConn', 'audioConn', 'hubGen', 'hubDevices', 'webcamOnHub', 'audioInterface', 'audioOnHub', 'captureCard', 'vrHeadset'];
 const bgFields = ['discordOverlay', 'browserVideo', 'rgbSoftware', 'streaming'];
 const keyMap = { igpuVram: 'igpuVramGB' };
@@ -119,10 +105,10 @@ function refreshSetupWarnings() {
 
 /* ---------- Games tab ---------- */
 function fillRes() {
-  const mon = setup.monitors[0]; const sel = $('res'); const cur = sel.value; sel.innerHTML = '';
+  const mon = engineSetup().monitors[0] || setup.monitors[0]; const sel = $('res'); const cur = sel.value; sel.innerHTML = '';
   sel.append(el('option', { value: `${mon.w}x${mon.h}` }, `Monitor native ${mon.w}x${mon.h}`));
   COMMON_RES.filter((r) => r.w * r.h < mon.w * mon.h).reverse().forEach((r) => sel.append(el('option', { value: `${r.w}x${r.h}` }, r.label)));
-  if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+  const key = `${mon.w}x${mon.h}`; if (sel.dataset.mon === key && [...sel.options].some((o) => o.value === cur)) sel.value = cur; sel.dataset.mon = key;
   const cr = $('calRes'); cr.innerHTML = ''; COMMON_RES.forEach((r) => cr.append(el('option', { value: `${r.w}x${r.h}` }, r.label))); cr.value = `${mon.w}x${mon.h}`;
 }
 function initGames() {
@@ -348,7 +334,15 @@ const GOALS = [
   { id: 'battery', name: 'Battery life', desc: 'Cap fps, save power', portable: true },
 ];
 function currentGoal() { return setup.goal || 'refresh'; }
+function renderModeToggle() {
+  const t = $('modeToggle'); t.innerHTML = '';
+  t.hidden = !(setup.form !== 'desktop' && setup.playModes === 'both');
+  if (t.hidden) return;
+  t.append(el('span', { class: 'goal-label' }, 'Playing:'));
+  [['handheld', 'Handheld'], ['docked', 'Docked']].forEach(([v, l]) => t.append(el('button', { type: 'button', class: 'chip-btn' + (setup.playMode === v ? ' active' : ''), onclick: () => { setup.playMode = v; writeField('playMode', v); saveSetup(); renderModeToggle(); refreshSetupWarnings(); fillRes(); } }, l)));
+}
 function renderGoalChips() {
+  renderModeToggle();
   const row = $('goalChips'); row.innerHTML = '';
   row.append(el('span', { class: 'goal-label' }, 'Goal:'));
   GOALS.filter((g) => !g.portable || setup.form !== 'desktop').forEach((g) => row.append(el('button', { type: 'button', class: 'chip-btn' + (currentGoal() === g.id ? ' active' : ''), title: g.desc, onclick: () => { setup.goal = g.id; saveSetup(); renderGoalChips(); } }, g.name)));
@@ -371,11 +365,14 @@ $('targetFps').addEventListener('change', () => { $('targetFps').dataset.touched
 
 /* ---------- Setup summary ---------- */
 function renderSummary() {
-  const es = engineSetup(); const gpu = resolveGpu(es), cpu = resolveCpu(es); const d = setup.device ? DEVICE_BY_ID[setup.device] : null; const mon = setup.monitors[0];
+  const es = engineSetup(); const gpu = resolveGpu(es), cpu = resolveCpu(es); const d = setup.device ? DEVICE_BY_ID[setup.device] : null; const es0 = engineSetup(); const mon = primaryMonitor(es0);
   const pm = d && d.powerModes ? d.powerModes[setup.powerModeIdx ?? d.defaultPower] : null;
   const f = systemFactors(es);
-  const rows = [['Device', d ? d.name : `Custom ${setup.form}`], ['Processor', cpu.name], ['Graphics', gpu.name], ['Memory', `${setup.ramGB} GB`], ['Screen', `${mon.w}x${mon.h} at ${mon.hz} Hz${mon.vrr ? ', VRR on' : ''}${setup.monitors.length > 1 ? ` (+${setup.monitors.length - 1} more)` : ''}`]];
+  const rows = [['Device', d ? d.name : `Custom ${setup.form}`], ['Processor', cpu.name], ['Graphics', gpu.name], ['Memory', `${setup.ramGB} GB`], ['Game screen', `${mon.model ? mon.model + ', ' : ''}${mon.w}x${mon.h} at ${mon.hz} Hz${mon.linkLimited ? ` (limited from ${mon.linkLimited} Hz by the dock or cable)` : ''}${mon.vrr ? ', VRR on' : ''}`]];
   if (pm) rows.push(['Power mode', pm.name]);
+  const portable = setup.form !== 'desktop';
+  if (portable) { rows.push(['Plays', setup.playModes === 'both' ? `Handheld and docked (now: ${setup.playMode})` : setup.playMode === 'docked' ? 'Docked' : 'Handheld']); if (setup.dock && setup.dock !== 'none') rows.push(['Dock', DOCKS.find((x) => x.id === setup.dock).name]); rows.push(['Charger', CHARGERS.find((x) => x.id === (setup.charger || 'stock')).name]); }
+  if (setup.egpu && setup.egpu !== 'none') rows.push(['External GPU', EGPUS.find((x) => x.id === setup.egpu).name + (setup.egpu === 'custom' ? `: ${setup.egpuGpu}` : '')]);
   rows.push(['Goal', (GOALS.find((g) => g.id === currentGoal()) || GOALS[0]).name], ['Accuracy', setup.calibration ? 'Calibrated (about ±7%)' : 'Not calibrated (about ±15%)']);
   const card = el('div', { class: 'summary-card' }, el('h2', {}, 'My setup'));
   rows.forEach(([k, v]) => card.append(el('div', { class: 'set-row' }, el('span', {}, k), el('strong', {}, v))));
@@ -400,7 +397,8 @@ function writeAllFields() { simpleFields.forEach((id) => writeField(id, setup[ke
 function tiles(items) { const g = el('div', { class: 'wiz-tiles' }); items.forEach(([label, sub, fn]) => g.append(el('button', { type: 'button', class: 'wiz-tile', onclick: fn }, el('strong', {}, label), sub ? el('span', {}, sub) : ''))); return g; }
 function wizScreen(title, sub, ...content) {
   const steps = ['welcome', 'device', 'power', 'screen', 'goal'];
-  const idx = Math.max(0, steps.indexOf(wiz.step === 'confirm' || wiz.step === 'type' || wiz.step === 'model' || wiz.step === 'parts' ? 'device' : wiz.step));
+  const map = { confirm: 'device', type: 'device', model: 'device', parts: 'device', where: 'power', dock: 'power', charger: 'power', egpu: 'power', egpu2: 'power', screen2: 'screen', done: 'goal' };
+  const idx = Math.max(0, steps.indexOf(map[wiz.step] || wiz.step));
   const w = $('wizard'); w.innerHTML = '';
   w.append(el('div', { class: 'wiz-card' },
     el('div', { class: 'wiz-progress' }, ...steps.map((_, i) => el('span', { class: i <= idx ? 'on' : '' }))),
@@ -429,7 +427,7 @@ async function renderWizard() {
   if (s === 'model') {
     const list = DEVICES.filter((d) => d.type === wiz.type);
     return wizScreen('Which one?', wiz.type === 'desktop' ? 'Pick your prebuilt, or choose "Mine isn’t listed" for a custom PC.' : null, tiles([
-      ...list.map((d) => [d.name.replace(/\s*\(.*\)$/, ''), (d.name.match(/\((.*)\)$/) || [])[1] || '', () => { setup.device = d.id; markManual('device'); applyDevice(true); saveSetup(); go(d.powerModes || wiz.type === 'laptop' ? 'power' : 'screen'); }]),
+      ...list.map((d) => [d.name.replace(/\s*\(.*\)$/, ''), (d.name.match(/\((.*)\)$/) || [])[1] || '', () => { setup.device = d.id; markManual('device'); applyDevice(true); saveSetup(); go(d.powerModes || wiz.type === 'laptop' ? 'power' : (wiz.type === 'handheld' ? 'where' : 'screen')); }]),
       ['Mine isn’t listed', 'Enter the processor and graphics card', () => { setup.device = ''; setup.form = wiz.type; markManual('device'); saveSetup(); go('parts'); }],
     ]));
   }
@@ -443,19 +441,32 @@ async function renderWizard() {
   }
   if (s === 'power') {
     const d = setup.device ? DEVICE_BY_ID[setup.device] : null;
-    if (d && d.powerModes) return wizScreen('How do you usually play?', 'Pick the power mode you play in most. You can change it any time.', tiles(d.powerModes.map((p, i) => [p.name, i === d.defaultPower ? 'Most common' : '', () => { setup.powerModeIdx = i; markManual('powerMode'); saveSetup(); go('screen'); }])));
-    return wizScreen('How do you usually play?', null, tiles([['Plugged in', 'Full performance', () => { setup.onBattery = false; markManual('onBattery'); saveSetup(); go('screen'); }], ['On battery', 'About 30-40% slower', () => { setup.onBattery = true; markManual('onBattery'); saveSetup(); go('screen'); }]]));
+    if (d && d.powerModes) return wizScreen('How do you usually play?', 'Pick the power mode you play in most. You can change it any time.', tiles(d.powerModes.map((p, i) => [p.name, i === d.defaultPower ? 'Most common' : '', () => { setup.powerModeIdx = i; markManual('powerMode'); saveSetup(); go('where'); }])));
+    return wizScreen('How do you usually play?', null, tiles([['Plugged in', 'Full performance', () => { setup.onBattery = false; markManual('onBattery'); saveSetup(); go('where'); }], ['On battery', 'About 30-40% slower', () => { setup.onBattery = true; markManual('onBattery'); saveSetup(); go('where'); }]]));
   }
+  if (s === 'where' && setup.form === 'desktop') return go('screen');
+  if (s === 'where') return wizScreen('Where do you play?', null, tiles([
+    ['On its own screen', 'Handheld or laptop screen only', () => { setup.playMode = 'handheld'; setup.playModes = 'handheld'; saveSetup(); go('charger'); }],
+    ['Docked to a TV or monitor', '', () => { setup.playMode = 'docked'; setup.playModes = 'docked'; saveSetup(); go('dock'); }],
+    ['Both', 'Switch any time on the Games screen', () => { setup.playMode = 'docked'; setup.playModes = 'both'; saveSetup(); go('dock'); }]]));
+  if (s === 'dock') return wizScreen('How do you connect to the screen?', 'The dock decides the highest resolution and refresh rate your TV or monitor can get.', tiles(DOCKS.filter((x) => x.id !== 'none').map((x) => [x.name, x.note || '', () => { setup.dock = x.id; markManual('dock'); saveSetup(); go('charger'); }])));
+  if (s === 'charger') { const dev = setup.device ? DEVICE_BY_ID[setup.device] : null; return wizScreen('What charger do you use?', dev && dev.stockChargerW ? `The one in the box is ${dev.stockChargerW} W. Full-power modes need about 60 W or more${setup.playMode === 'docked' ? ', and a dock uses some of it' : ''}.` : null, tiles(CHARGERS.map((c) => [c.name, '', () => { setup.charger = c.id; markManual('charger'); saveSetup(); go('egpu'); }]))); }
+  if (s === 'egpu') { const dev = setup.device ? DEVICE_BY_ID[setup.device] : null; const ports = dev?.ports || ['usb4', 'xgm']; const list = EGPUS.filter((x) => x.id === 'none' || x.id === 'custom' || (x.port === 'xgm' ? ports.includes('xgm') : ports.some((p) => /usb4|tb/.test(p))));
+    return wizScreen('Do you use an external graphics card?', 'Like an ASUS XG Mobile or a Thunderbolt/OCuLink eGPU box.', tiles(list.map((x) => [x.id === 'none' ? 'No' : x.name, x.port === 'xgm' ? 'Uses the XG Mobile port' : '', () => { setup.egpu = x.id; markManual('egpu'); saveSetup(); go(x.id === 'custom' ? 'egpu2' : 'screen'); }]))); }
+  if (s === 'egpu2') { const gIn = el('input', { list: 'gpuList', value: setup.egpuGpu || '', placeholder: 'e.g. RTX 4070' }); const lk = el('select'); EGPU_LINKS.forEach((x) => lk.append(el('option', { value: x.id }, x.name))); lk.value = setup.egpuLink || 'tb4';
+    return wizScreen('Your eGPU', null, el('label', { class: 'wiz-field' }, 'Graphics card in the enclosure', gIn), el('label', { class: 'wiz-field' }, 'How it connects', lk), el('div', { class: 'wiz-buttons' }, el('button', { type: 'button', class: 'big primary', onclick: () => { setup.egpuGpu = gIn.value; setup.egpuLink = lk.value; saveSetup(); go('screen'); } }, 'Next'))); }
   if (s === 'screen') {
+    if (setup.playMode === 'docked' && !setup.monitors.some((m) => !m.builtin && m.link !== 'internal')) setup.monitors.push({ w: 1920, h: 1080, hz: 60, vrr: false, vrrType: 'none', hdr: false, link: 'HDMI2.0', dsc: true, video: false, model: '', manual: [] });
     const ext = setup.monitors.findIndex((m) => !m.builtin && m.link !== 'internal');
     if (ext < 0) return go('goal');
     const m = setup.monitors[ext];
+    const resSel = el('select'); COMMON_RES.forEach((r) => resSel.append(el('option', { value: `${r.w}x${r.h}` }, r.label))); if (![...resSel.options].some((o) => o.value === `${m.w}x${m.h}`)) resSel.append(el('option', { value: `${m.w}x${m.h}` }, `${m.w}x${m.h}`)); resSel.value = `${m.w}x${m.h}`;
     const hzSel = el('select'); [60, 75, 100, 120, 144, 165, 170, 180, 240, 280, 360, 480, 540].forEach((v) => hzSel.append(el('option', { value: v }, `${v} Hz`))); if (![...hzSel.options].some((o) => +o.value === m.hz)) hzSel.append(el('option', { value: m.hz }, `${m.hz} Hz`)); hzSel.value = m.hz;
     const vrrBtns = (val) => { m.vrr = val; m.vrrType = val ? 'freesync' : 'none'; m.manual = [...new Set([...(m.manual || []), 'vrr'])]; };
-    const multi = setup.monitors.length > 1;
-    const next = () => { m.hz = +hzSel.value; m.manual = [...new Set([...(m.manual || []), 'hz'])]; saveSetup(); go(multi ? 'screen2' : 'goal'); };
-    return wizScreen('Your monitor', m.model ? `Found: ${m.model}, ${m.w}x${m.h}` : `Found: ${m.w}x${m.h}`,
-      el('label', { class: 'wiz-field' }, 'Highest refresh rate it supports', hzSel),
+    const multi = setup.monitors.filter((x) => !x.builtin && x.link !== 'internal').length > 1;
+    const next = () => { m.hz = +hzSel.value; const [rw, rh] = resSel.value.split('x').map(Number); m.w = rw; m.h = rh; m.manual = [...new Set([...(m.manual || []), 'hz', 'res'])]; saveSetup(); go(multi ? 'screen2' : 'goal'); };
+    return wizScreen(setup.playMode === 'docked' ? 'Your TV or monitor' : 'Your monitor', m.model ? `Found: ${m.model}` : setup.playMode === 'docked' ? 'Tell us about the screen you dock to.' : null,
+      el('label', { class: 'wiz-field' }, 'Resolution', resSel), el('label', { class: 'wiz-field' }, 'Highest refresh rate it supports', hzSel),
       el('div', { class: 'wiz-q' }, 'Does it have FreeSync or G-SYNC?'),
       tiles([['Yes', '', () => { vrrBtns(true); next(); }], ['No', '', () => { vrrBtns(false); next(); }], ['Not sure', 'Treated as no', () => { vrrBtns(false); next(); }]]),
       m.model && isDesktopApp ? el('button', { type: 'button', class: 'linkish', onclick: () => runAction('monitor-specs', m.model) }, `Look up ${m.model} specs`) : '');

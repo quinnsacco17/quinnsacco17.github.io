@@ -143,6 +143,7 @@ export function recommend(setup, game, opts) {
 export function frameCapAdvice(setup, est, mon, game, competitive) {
   const gpu = resolveGpu(setup);
   const out = [];
+  if (mon.linkLimited) out.push(`Your cable or dock can't carry ${mon.w}x${mon.h} at ${mon.linkLimited} Hz, so this screen is limited to ${mon.hz} Hz. A better dock, HDMI 2.1, or DisplayPort fixes it.`);
   const reflex = gpu.vendor === 'NVIDIA' ? 'NVIDIA Reflex (On + Boost)' : gpu.vendor === 'AMD' ? 'Radeon Anti-Lag 2' : 'Intel XeLL';
   if (mon.vrr) {
     const cap = mon.hz - Math.max(3, Math.round(mon.hz * 0.03));

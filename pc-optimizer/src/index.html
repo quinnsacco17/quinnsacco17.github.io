@@ -20,6 +20,7 @@
 <main>
 <section id="view-games" class="view active">
   <div id="gamesHome">
+    <div class="mode-row" id="modeToggle" hidden></div>
     <div class="goal-row" id="goalChips"></div>
     <div class="search-row"><input id="gameSearch" type="search" placeholder="Search games"></div>
     <div id="gameGrid" class="game-grid"></div>
@@ -84,6 +85,11 @@
         <label><input type="checkbox" id="vrHeadset"> VR headset connected</label>
       </div>
       <label>Network<select id="network"></select></label>
+      <h2>Docking and accessories</h2>
+      <div class="row"><label>Where you play<select id="playMode"><option value="handheld">Handheld / built-in screen</option><option value="docked">Docked to a TV or monitor</option></select></label><label>Dock or hub<select id="dock"></select></label></div>
+      <div class="row"><label>Charger<select id="charger"></select></label><label class="chk"><input type="checkbox" id="dockEthernet"> Ethernet plugged into the dock</label></div>
+      <div class="row"><label>External GPU<select id="egpu"></select></label><label>eGPU card (Other)<input list="gpuList" id="egpuGpu" placeholder="e.g. RTX 4070"></label><label>eGPU connection<select id="egpuLink"></select></label></div>
+      <label class="chk"><input type="checkbox" id="egpuInternal"> Playing on the built-in screen while using the eGPU</label>
       <h2>Software running while gaming</h2>
       <div class="checks">
         <label><input type="checkbox" id="discordOverlay"> Discord overlay</label>

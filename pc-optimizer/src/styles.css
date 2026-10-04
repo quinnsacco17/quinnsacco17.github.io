@@ -82,3 +82,4 @@ body.wiz-open{overflow:hidden}
 .pin{font-size:11px;padding:4px 8px;border-radius:999px;color:var(--muted)}.pin.on{color:var(--warn);border-color:var(--warn)}
 .list-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 4px;color:var(--muted);font-size:13px}.list-head span{flex:1;min-width:220px}
 #setupSummary{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}#setupSummary .summary-card{max-width:none}#setupSummary .set-row select{width:auto;max-width:60%}
+.mode-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}

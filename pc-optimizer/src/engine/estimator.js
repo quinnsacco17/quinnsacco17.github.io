@@ -117,6 +117,7 @@ export function systemFactors(setup) {
   }
   // Thermal
   if (setup.cooling === 'poor') { f.gpu *= 0.95; f.cpu *= 0.95; f.notes.push('Poor airflow: ~5% sustained clock loss assumed. Clean filters, add intake.'); }
+  (setup.accessoryWarnings || []).forEach((w) => f.warnings.push(w)); (setup.accessoryNotes || []).forEach((n) => f.notes.push(n));
   // Calibration
   if (setup.calibration) { f.gpu *= setup.calibration.gpu || 1; f.cpu *= setup.calibration.cpu || 1; f.notes.push(`Calibrated from measured fps (GPU x${(setup.calibration.gpu || 1).toFixed(2)}, CPU x${(setup.calibration.cpu || 1).toFixed(2)}).`); }
   return f;
@@ -124,7 +125,12 @@ export function systemFactors(setup) {
 
 export function primaryMonitor(setup) {
   const m = (setup.monitors || [])[0];
-  return m || { w: 1920, h: 1080, hz: 60, vrr: false, hdr: false, link: 'DP1.4', dsc: true };
+  if (!m) return { w: 1920, h: 1080, hz: 60, vrr: false, hdr: false, link: 'DP1.4', dsc: true };
+  if (m.link && m.link !== 'internal') {
+    const lc = linkCheck(m.w, m.h, m.hz, m.hdr ? 10 : 8, m.link, m.dsc !== false);
+    if (!lc.ok && lc.maxHz8) { const std = [24, 30, 48, 50, 60, 75, 90, 100, 120, 144, 165, 175, 240].filter((r) => r <= lc.maxHz8); return { ...m, hz: Math.min(m.hz, std.length ? std[std.length - 1] : 24), linkLimited: m.hz }; }
+  }
+  return m;
 }
 
 export function displayChecks(setup) {
