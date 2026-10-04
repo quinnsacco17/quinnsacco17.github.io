@@ -86,3 +86,18 @@ test('hardware name matching', () => {
   assert.equal(bestMatch('13th Gen Intel(R) Core(TM) i7-13700K', CPUS).name, 'Intel Core i7-13700K');
   assert.equal(bestMatch('AMD Radeon RX 7800 XT', GPUS).name, 'AMD Radeon RX 7800 XT');
 });
+
+test('preferences and pinned settings are honored', () => {
+  const cp = GAME_BY_ID.cyberpunk;
+  const noFg = recommend(mid, cp, { mode: 'refresh', prefs: { fg: 'never' } });
+  assert.equal(noFg.best.fg.id, 'off');
+  const native = recommend(mid, cp, { mode: 'quality60', prefs: { upscale: 'native' } });
+  assert.equal(native.best.cfg.mode, 'native');
+  const fsr = recommend(mid, cp, { mode: 'refresh', prefs: { upscaler: 'fsr', fg: 'never' } });
+  assert.ok(!fsr.best.up || fsr.best.up.id === 'fsr');
+  const texIdx = cp.settings.findIndex((s) => s.key === 'textures'); const mbIdx = cp.settings.findIndex((s) => s.key === 'mblur');
+  const pinned = recommend({ ...mid, monitors: [{ w: 3840, h: 2160, hz: 144, vrr: true }] }, cp, { mode: 'refresh', locks: { textures: 3, mblur: 0, rt: 0 } });
+  assert.equal(pinned.best.cfg.settings[texIdx], 3); assert.equal(pinned.best.cfg.settings[mbIdx], 0); assert.equal(pinned.best.cfg.rtIndex, 0);
+  const rtPref = recommend(mid, cp, { mode: 'quality60', prefs: { rt: 'prefer' } });
+  assert.ok(rtPref.best.cfg.rtIndex > 0);
+});

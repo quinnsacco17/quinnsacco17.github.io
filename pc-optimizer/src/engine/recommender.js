@@ -13,12 +13,13 @@ export function baseConfig(game, w, h) {
   return { settings: game.settings.map((s) => s.defaultIndex ?? s.options.length - 1), rtIndex: 0, upscaler: null, mode: 'native', fg: 'off', w, h };
 }
 
-function stepDown(game, cfg, competitive) {
+function stepDown(game, cfg, competitive, locks = {}) {
   // Returns list of candidate single-step reductions [{cfg, loss}]
   const out = [];
   game.settings.forEach((s, i) => {
     const cur = cfg.settings[i];
     if (cur <= 0) return;
+    if (s.key in locks) return;
     if (competitive && s.key === 'textures' && cur <= 2) return; // keep textures at least High in comp
     const c = { ...cfg, settings: [...cfg.settings] }; c.settings[i] = cur - 1;
     const loss = (s.visual[cur] - s.visual[cur - 1]) * s.weight;
@@ -27,12 +28,12 @@ function stepDown(game, cfg, competitive) {
   return out;
 }
 
-function greedy(setup, game, cfg, target, lowsTarget, competitive, budget = 64) {
+function greedy(setup, game, cfg, target, lowsTarget, competitive, budget = 64, locks = {}) {
   let cur = cfg, est = estimate(setup, game, cur);
   const log = [];
   let steps = 0;
   while ((est.fps < target || est.lows < lowsTarget) && steps++ < budget) {
-    const cands = stepDown(game, cur, competitive);
+    const cands = stepDown(game, cur, competitive, locks);
     if (!cands.length) break;
     let best = null;
     for (const c of cands) {
@@ -63,16 +64,26 @@ export function recommend(setup, game, opts) {
   else if (mode === 'battery') { target = opts.targetFps || 45; lowsTarget = target * 0.85; allowFg = false; allowRt = false; }
   if (game.cap && target > game.cap) { target = game.cap; lowsTarget = game.cap * 0.9; }
 
-  const upscalers = availableUpscalers(gpu, game);
-  const fgs = allowFg ? fgOptions(gpu, game) : [fgOptions(gpu, game)[0]];
-  const rtModes = game.rt ? game.rt.modes.map((_, i) => i) : [0];
+  const prefs = { fg: 'allow', upscale: 'allow', upscaler: 'auto', rt: 'auto', ...(opts.prefs || {}) };
+  const locks = opts.locks || {};
+  if (prefs.fg === 'never') allowFg = false;
+  if (prefs.rt === 'off') allowRt = false;
+  let upscalers = prefs.upscale === 'native' ? [] : availableUpscalers(gpu, game);
+  if (prefs.upscaler !== 'auto' && upscalers.some((u) => u.id === prefs.upscaler)) upscalers = upscalers.filter((u) => u.id === prefs.upscaler);
+  if ('upscaler' in locks) upscalers = locks.upscaler ? upscalers.filter((u) => u.id === locks.upscaler) : [];
+  let fgs = allowFg ? fgOptions(gpu, game) : [fgOptions(gpu, game)[0]];
+  if ('fg' in locks) fgs = fgOptions(gpu, game).filter((f) => f.id === locks.fg); if (!fgs.length) fgs = [fgOptions(gpu, game)[0]];
+  let rtModes = game.rt ? game.rt.modes.map((_, i) => i) : [0];
+  if (game.rt && prefs.rt === 'prefer' && !competitive) rtModes = rtModes.filter((i) => i > 0);
+  if (game.rt && 'rt' in locks) { rtModes = [Math.min(locks.rt, game.rt.modes.length - 1)]; allowRt = true; }
   const candidates = [];
-  const upsCombos = [{ up: null, modeId: 'native' }];
+  const upsCombos = ('mode' in locks && locks.mode !== 'native') || ('upscaler' in locks && locks.upscaler) ? [] : [{ up: null, modeId: 'native' }];
   for (const up of upscalers) {
     for (const m of UPSCALE_MODES) {
       if (m.id === 'native') continue;
       if (m.id === 'dlaa' && !(up.tech.startsWith('dlss') || up.tech === 'fsr4' || up.tech === 'xessXMX')) continue;
       if (competitive && (m.id === 'ultraperf' || m.id === 'performance')) continue;
+      if ('mode' in locks && locks.mode !== m.id) continue;
       upsCombos.push({ up, modeId: m.id });
     }
   }
@@ -82,8 +93,9 @@ export function recommend(setup, game, opts) {
       for (const fg of fgs) {
         let cfg = { ...baseConfig(game, w, h), rtIndex: rtI, upscaler: uc.up, mode: uc.modeId, fg: fg.id };
         if (competitive) { cfg.settings = game.settings.map((s) => s.competitiveOff ? 0 : s.key === 'textures' ? Math.min(2, s.options.length - 1) : s.key === 'aa' ? s.options.length - 1 : s.key === 'shadows' ? Math.min(1, s.options.length - 1) : 0); }
-        const g = greedy(setup, game, cfg, target, lowsTarget, competitive);
-        if (fg.id !== 'off' && g.est.baseFps < 55) continue;
+        game.settings.forEach((s, i) => { if (s.key in locks) cfg.settings[i] = Math.min(locks[s.key], s.options.length - 1); });
+        const g = greedy(setup, game, cfg, target, lowsTarget, competitive, 64, locks);
+        if (fg.id !== 'off' && g.est.baseFps < 55 && !('fg' in locks)) continue;
         const meets = g.est.fps >= target - 0.5 && g.est.lows >= lowsTarget - 0.5;
         let vis = visualScore(game, g.cfg, uc.up?.tech);
         if (fg.id !== 'off') vis -= 0.35 * (fg.id === 'fg4' ? 2 : fg.id === 'fg3' ? 1.5 : 1); // latency + artifacts
@@ -97,6 +109,7 @@ export function recommend(setup, game, opts) {
       }
     }
   }
+  if (!candidates.length) { const r = recommend(setup, game, { ...opts, locks: {}, prefs: {} }); return { ...r, lockConflict: true }; }
   candidates.sort((a, b) => b.score - a.score);
   const best = candidates[0];
   const anyMeets = candidates.some((c) => c.meets);
