@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { detectHardware } from './detect.js';
@@ -22,7 +24,9 @@ function createWindow() {
           out.kpis = [...document.querySelectorAll('.kpi .v')].map((e) => e.textContent);
           out.applyBtn = !![...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Apply to game'));
           const hw = await window.optimizer.detect(); out.detect = { cpu: hw.cpu && hw.cpu.brand, mem: hw.mem && hw.mem.total };
-          const ap = await window.optimizer.applySettings('nope', {}); out.applyUnknown = ap;
+          const ap = await window.optimizer.applySettings('nope', {}); out.applyUnknown = ap.ok;
+          await new Promise((r) => setTimeout(r, 4000)); out.banner = document.getElementById('detectBanner').textContent; out.checklist = document.getElementById('checklistCount').textContent; out.autoChips = document.querySelectorAll('.chip.auto').length;
+          out.openDisplay = await window.optimizer.open('display'); out.openBogus = await window.optimizer.open('rm -rf'); out.searchUnknown = await window.optimizer.open('monitor-specs', 'evil');
           return out; })()`);
         console.log('SMOKE', JSON.stringify(r));
       } catch (e) { console.log('SMOKE_ERROR', e.message); }
@@ -30,8 +34,46 @@ function createWindow() {
     });
   }
 }
+const WIN_TARGETS = {
+  display: { url: 'ms-settings:display' },
+  graphics: { url: 'ms-settings:display-advancedgraphics' },
+  gamemode: { url: 'ms-settings:gaming-gamemode' },
+  power: { url: 'ms-settings:powersleep' },
+  bluetooth: { url: 'ms-settings:bluetooth' },
+  network: { url: 'ms-settings:network-status' },
+  steam: { url: 'steam://open/settings' },
+  devmgr: { cmd: ['mmc.exe', ['devmgmt.msc']] },
+  msinfo: { cmd: ['msinfo32.exe', []] },
+  dxdiag: { cmd: ['dxdiag.exe', []] },
+  nvcp: { cmd: ['explorer.exe', ['shell:AppsFolder\\NVIDIACorp.NVIDIAControlPanel_56jhes6jfw8m2!NVIDIACorp.NVIDIAControlPanel']] },
+  nvapp: { file: 'C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\CEF\\NVIDIA App.exe' },
+  amd: { file: 'C:\\Program Files\\AMD\\CNext\\CNext\\RadeonSoftware.exe' },
+  armoury: { cmd: ['explorer.exe', ['shell:AppsFolder\\B9ECED6F.ArmouryCrateSE_qmba6cd70vzyy!App']] },
+};
+const MAC_TARGETS = { display: { url: 'x-apple.systempreferences:com.apple.Displays-Settings.extension' }, steam: { url: 'steam://open/settings' }, power: { url: 'x-apple.systempreferences:com.apple.Battery-Settings.extension' } };
+const SEARCH_TARGETS = { 'monitor-specs': (q) => `${q} monitor specs refresh rate VRR HDR`, 'psu-specs': (q) => `${q} power supply wattage`, 'device-specs': (q) => `${q} specifications` };
+
 app.whenReady().then(() => {
-  ipcMain.handle('detect', () => detectHardware());
+  let lastDetected = new Set();
+  ipcMain.handle('detect', async () => {
+    const hw = await detectHardware();
+    lastDetected = new Set([...(hw.graphics?.displays || []).map((d) => d.model), `${hw.system?.manufacturer || ''} ${hw.system?.model || ''}`.trim()].filter(Boolean));
+    return hw;
+  });
+  ipcMain.handle('open', async (ev, target, arg) => {
+    if (SEARCH_TARGETS[target]) {
+      if (typeof arg !== 'string' || arg.length > 120 || !lastDetected.has(arg)) return { ok: false, error: 'Run hardware detection first.' };
+      await shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(SEARCH_TARGETS[target](arg))}`); return { ok: true };
+    }
+    const t = (process.platform === 'win32' ? WIN_TARGETS : process.platform === 'darwin' ? MAC_TARGETS : {})[target];
+    if (!t) return { ok: false, error: 'Not available on this system.' };
+    try {
+      if (t.url) await shell.openExternal(t.url);
+      else if (t.file) { if (!fs.existsSync(t.file)) return { ok: false, error: 'Not installed.' }; const r = await shell.openPath(t.file); if (r) return { ok: false, error: r }; }
+      else if (t.cmd) { const c = spawn(t.cmd[0], t.cmd[1], { detached: true, stdio: 'ignore' }); c.on('error', () => {}); c.unref(); }
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.message }; }
+  });
   ipcMain.handle('apply', async (ev, gameId, values) => {
     const target = describeTarget(gameId);
     if (!target) return { ok: false, error: 'This game has no config writer yet (encrypted or cloud-synced settings). Use "Copy settings list".' };

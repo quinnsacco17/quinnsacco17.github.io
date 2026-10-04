@@ -26,6 +26,8 @@
 
 <main>
 <section id="tab-setup" class="tab active">
+  <div id="detectBanner" class="banner" hidden></div>
+  <div class="card"><h2>Setup checklist · <span id="checklistCount"></span></h2><div class="notes">Green "Auto" fields were read from this machine. Yellow "Check" fields need you: click one to jump to it and open its step-by-step help.</div><div id="checklist" class="checklist"></div><label class="chk" style="flex-direction:row;align-items:center;gap:6px;color:var(--text)"><input type="checkbox" id="autoDetect"> Re-detect hardware every time the app opens (keeps anything you set by hand)</label></div>
   <div class="grid2">
     <div class="card">
       <h2>Device</h2>
@@ -91,7 +93,7 @@
 <section id="tab-calibrate" class="tab">
   <div class="card">
     <h2>Calibrate to your real machine</h2>
-    <p>Run any game, note the average fps (use the in-game counter, Steam overlay, or MSI Afterburner over 1-2 minutes of normal play), then enter it here. The model rescales GPU and CPU performance to match. One measurement gets most of the gain; three different games is best.</p>
+    <p>The model rescales your GPU and CPU to match one real measurement. Here is how to get it:</p><div id="measureHelp"></div>
     <div class="row">
       <label>Game<select id="calGame"></select></label>
       <label>Preset you ran<select id="calPreset"><option value="0">Low</option><option value="1">Medium</option><option value="2">High</option><option value="3" selected>Ultra / Epic</option></select></label>

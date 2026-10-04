@@ -18,6 +18,16 @@ Enter your exact setup (or auto-detect it), pick a game and a goal, get the sett
 | Power / thermal | PSU watts, airflow | Shutdown risk, sustained clocks |
 | Network | Ethernet, Wi-Fi 5/6/6E/7, powerline, hotspot | Latency notes |
 
+## Auto-detection and guided setup
+
+The desktop app re-detects hardware every launch and never overwrites a field you set by hand. Each field shows **Auto** (read from the machine), **Check** (needs you), or **Set by you**. The Setup checklist lists every Check item; clicking one jumps to it and opens step-by-step help with buttons that open the right Windows page or tool.
+
+Detected automatically: commercial device model (ROG Ally / Ally X / Xbox Ally, Steam Deck, Legion Go / Go S, MSI Claw, several laptops and prebuilts), CPU, GPU (laptop vs desktop variant), iGPU memory allocation, NVIDIA PCIe link, RAM size/channels/speed (with an XMP/EXPO hint), game drive type, laptop vs desktop, battery state, NVIDIA laptop MUX vs Optimus, monitors (model, resolution, refresh, port type), network type and Wi-Fi band, USB hubs, capture cards, audio interfaces, controllers, wireless mouse receivers, Discord, RGB suites, OBS and its encoder, VR runtimes.
+
+Measured in the app: mouse polling rate (move the mouse in the test box).
+
+Still manual, with guided steps: monitor VRR/HDR (spec lookup button per monitor), exact cable version, handheld power mode, PSU wattage (spec search button for prebuilts), cooling, devices per hub.
+
 ## Per game
 
 50 games with individual setting costs (GPU, CPU, VRAM, visual value), RT modes, upscaler support, engine caps, and tips. The recommender searches RT x upscaler x frame-gen combinations and greedily drops the lowest-value-per-fps settings until the goal is met, then ranks by visual quality. Goals: match refresh, max quality at 60, custom fps, competitive, balanced, battery.

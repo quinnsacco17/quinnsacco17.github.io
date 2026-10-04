@@ -1,13 +1,13 @@
 {
   "name": "setup-optimizer",
   "productName": "Setup Optimizer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Enter your exact PC setup and get the best per-game settings for a target performance.",
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
     "start": "electron .",
-    "test": "node --test tests/engine.test.js tests/apply.test.js",
+    "test": "node --test tests/engine.test.js tests/apply.test.js tests/detect.test.js",
     "dist:win": "electron-builder --win nsis portable",
     "dist:mac": "electron-builder --mac dmg",
     "web": "npx http-server src -p 8080"

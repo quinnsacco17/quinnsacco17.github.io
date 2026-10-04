@@ -8,6 +8,7 @@ import { estimate, systemFactors, displayChecks, resolveGpu, resolveCpu, availab
 import { recommend, TARGET_MODES, baseConfig, calibrate } from './engine/recommender.js';
 import { renderPreview, SETTING_EXPLAIN } from './preview.js';
 import { matchHardware } from './engine/match.js';
+import { HELP, helpBlock, measureBlock, pollingTester, runAction } from './assist.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); Object.entries(attrs).forEach(([k, v]) => k === 'class' ? e.className = v : k.startsWith('on') ? e.addEventListener(k.slice(2), v) : e.setAttribute(k, v)); kids.flat().forEach((k) => e.append(k)); return e; };
@@ -21,7 +22,7 @@ function defaultSetup() {
   return { device: '', cpu: '', gpu: '', ramGB: 16, ramChannels: 2, ramType: 'DDR5-6000', storage: 'nvme4', pcie: 'pcie4x16', form: 'desktop', laptopMode: 'mux', onBattery: false, psuW: '', cooling: 'good', igpuVramGB: 4,
     monitors: [{ w: 1920, h: 1080, hz: 144, vrr: true, vrrType: 'freesync', hdr: false, link: 'DP1.4', dsc: true, video: false }],
     peripherals: { mouseConn: 'wired', mousePolling: 1000, mouseOnHub: false, controllerConn: '', audioConn: 'motherboard', hubGen: 'none', hubDevices: 0, webcamOnHub: false, audioInterface: false, audioOnHub: false, captureCard: false, vrHeadset: false },
-    network: 'eth1', background: { discordOverlay: true, browserVideo: false, rgbSoftware: false, streaming: '' }, calibration: null };
+    network: 'eth1', background: { discordOverlay: true, browserVideo: false, rgbSoftware: false, streaming: '' }, calibration: null, manual: [], autoFields: [], hints: {}, autoDetect: true, systemName: '' };
 }
 function loadSetup() { try { const s = JSON.parse(localStorage.getItem('setup') || 'null'); return s ? { ...defaultSetup(), ...s } : defaultSetup(); } catch { return defaultSetup(); } }
 function saveSetup() { localStorage.setItem('setup', JSON.stringify(setup)); }
@@ -64,12 +65,12 @@ const keyMap = { igpuVram: 'igpuVramGB' };
 function readField(id) { const e = $(id); return e.type === 'checkbox' ? e.checked : e.value; }
 function writeField(id, v) { const e = $(id); if (!e) return; if (e.type === 'checkbox') e.checked = !!v; else e.value = v ?? ''; }
 function bindSetupFields() {
-  simpleFields.forEach((id) => { writeField(id, setup[keyMap[id] || id]); $(id).addEventListener('change', () => { setup[keyMap[id] || id] = readField(id); saveSetup(); refreshSetupWarnings(); }); });
-  periFields.forEach((id) => { writeField(id, setup.peripherals[id]); $(id).addEventListener('change', () => { setup.peripherals[id] = readField(id); saveSetup(); refreshSetupWarnings(); }); });
-  bgFields.forEach((id) => { writeField(id, setup.background[id]); $(id).addEventListener('change', () => { setup.background[id] = readField(id); saveSetup(); refreshSetupWarnings(); }); });
+  simpleFields.forEach((id) => { writeField(id, setup[keyMap[id] || id]); $(id).addEventListener('change', () => { setup[keyMap[id] || id] = readField(id); markManual(id); saveSetup(); refreshSetupWarnings(); }); });
+  periFields.forEach((id) => { writeField(id, setup.peripherals[id]); $(id).addEventListener('change', () => { setup.peripherals[id] = readField(id); markManual(id); saveSetup(); refreshSetupWarnings(); }); });
+  bgFields.forEach((id) => { writeField(id, setup.background[id]); $(id).addEventListener('change', () => { setup.background[id] = readField(id); markManual(id); saveSetup(); refreshSetupWarnings(); }); });
   $('device').value = setup.device || '';
-  $('device').addEventListener('change', () => { setup.device = $('device').value; applyDevice(true); saveSetup(); refreshSetupWarnings(); });
-  $('powerMode').addEventListener('change', () => { setup.powerModeIdx = +$('powerMode').value; saveSetup(); refreshSetupWarnings(); });
+  $('device').addEventListener('change', () => { setup.device = $('device').value; markManual('device'); applyDevice(true); saveSetup(); refreshSetupWarnings(); });
+  $('powerMode').addEventListener('change', () => { setup.powerModeIdx = +$('powerMode').value; markManual('powerMode'); saveSetup(); refreshSetupWarnings(); });
 }
 function applyDevice(fill) {
   const d = setup.device ? DEVICE_BY_ID[setup.device] : null;
@@ -95,18 +96,23 @@ function renderMonitors() {
     const hdr = el('input', { type: 'checkbox' }); hdr.checked = !!m.hdr; hdr.onchange = () => { m.hdr = hdr.checked; saveSetup(); refreshSetupWarnings(); };
     const dsc = el('input', { type: 'checkbox' }); dsc.checked = m.dsc !== false; dsc.onchange = () => { m.dsc = dsc.checked; saveSetup(); refreshSetupWarnings(); };
     const video = el('input', { type: 'checkbox' }); video.checked = !!m.video; video.onchange = () => { m.video = video.checked; saveSetup(); refreshSetupWarnings(); };
-    const row = el('div', { class: 'monitor' }, el('strong', {}, i === 0 ? 'Game monitor' : `Monitor ${i + 1}`), el('label', {}, 'Resolution', resSel), el('label', {}, 'Refresh', hz), el('label', {}, 'Connection', link), el('label', {}, 'VRR', vrr), el('label', { class: 'chk' }, hdr, ' HDR'), el('label', { class: 'chk' }, dsc, ' DSC capable'));
+    [[resSel, 'res'], [hz, 'hz'], [link, 'link'], [vrr, 'vrr'], [hdr, 'hdr'], [dsc, 'dsc'], [video, 'video']].forEach(([ctl, k]) => ctl.addEventListener('change', () => { m.manual = [...new Set([...(m.manual || []), k])]; saveSetup(); refreshChips(); }));
+    const row = el('div', { class: 'monitor' }, el('strong', {}, (i === 0 ? 'Game monitor' : `Monitor ${i + 1}`) + (m.model ? ` · ${m.model}` : '')), el('label', {}, 'Resolution', resSel), el('label', {}, 'Refresh', hz), el('label', {}, 'Connection', link), el('label', {}, 'VRR', vrr), el('label', { class: 'chk' }, hdr, ' HDR'), el('label', { class: 'chk' }, dsc, ' DSC capable'));
+    if (m.model) row.append(el('button', { class: 'small', type: 'button', onclick: () => runAction('monitor-specs', m.model) }, 'Look up specs'));
+    if (!m.vrr && !(m.manual || []).includes('vrr') && !m.builtin) row.append(el('span', { class: 'chip check' }, 'Set VRR / HDR'));
     if (i > 0) row.append(el('label', { class: 'chk' }, video, ' Video playing on it'), el('button', { class: 'small', onclick: () => { setup.monitors.splice(i, 1); renderMonitors(); saveSetup(); refreshSetupWarnings(); } }, 'Remove'));
     wrap.append(row);
   });
 }
 function refreshSetupWarnings() {
+  refreshChips();
   const es = engineSetup(); const f = systemFactors(es); const dc = displayChecks(es);
   const gpu = resolveGpu(es), cpu = resolveCpu(es);
   const w = $('setupWarnings'); w.innerHTML = '';
   w.append(el('div', { class: 'info' }, `Using GPU "${gpu.name}" (index ${gpu.idx}, ${gpu.vram} GB) and CPU "${cpu.name}" (index ${cpu.idx}). Effective after your setup: GPU x${f.gpu.toFixed(2)}, CPU x${f.cpu.toFixed(2)}.`));
   if (!GPUS.some((g) => g.name === es.gpu) && !es.gpuIdxOverride) w.append(el('div', {}, 'GPU not in database: enter a custom GPU index (4090 = 100) or pick the closest card. TechPowerUp relative performance charts give this number directly.'));
   if (!CPUS.some((c) => c.name === es.cpu) && !es.cpuIdxOverride) w.append(el('div', {}, 'CPU not in database: enter a custom gaming index (9800X3D = 100) or pick the closest chip.'));
+  Object.values(setup.hints || {}).forEach((t) => w.append(el('div', { class: 'info' }, t)));
   f.warnings.forEach((t) => w.append(el('div', {}, t))); dc.forEach((d) => w.append(el('div', { class: d.level === 'info' ? 'info' : '' }, d.text))); f.notes.forEach((t) => w.append(el('div', { class: 'info' }, t)));
   [...PCIE, ...STORAGE, ...NETWORK, ...MOUSE_CONN, ...CONTROLLER_CONN, ...AUDIO_CONN, ...LAPTOP_GPU_MODE].forEach((c) => { const chosen = [setup.pcie, setup.storage, setup.network, setup.peripherals.mouseConn, setup.peripherals.controllerConn, setup.peripherals.audioConn, setup.form === 'laptop' ? setup.laptopMode : null]; if (c.note && chosen.includes(c.id)) w.append(el('div', { class: 'info' }, c.note)); });
 }
@@ -235,24 +241,85 @@ function runCalibrate() {
 }
 
 /* ---------- Detect ---------- */
-async function detect() {
-  if (!isDesktopApp) { alert('Hardware detection needs the desktop app (it reads CPU, GPU, RAM, monitors, drives, and USB devices from Windows). In the browser, pick parts manually or choose a device preset.'); return; }
+function markManual(id) { if (!setup.manual.includes(id)) setup.manual.push(id); refreshChips(); }
+const AUTO_TARGET = { device: 'device', cpu: 'cpu', gpu: 'gpu', igpuVram: 'igpuVramGB', pcie: 'pcie', ramGB: 'ramGB', ramChannels: 'ramChannels', ramType: 'ramType', storage: 'storage', form: 'form', onBattery: 'onBattery', laptopMode: 'laptopMode', network: 'network' };
+function applyDetection(m) {
+  const d = m.setup, changes = [];
+  const set = (key, obj, prop, val) => { if (setup.manual.includes(key) || val === undefined) return; if (JSON.stringify(obj[prop]) !== JSON.stringify(val)) changes.push(key); obj[prop] = val; };
+  setup.systemName = d.systemName || setup.systemName;
+  if (d.device && !setup.manual.includes('device') && setup.device !== d.device) { setup.device = d.device; changes.push('device'); applyDevice(true); }
+  for (const key of m.auto) {
+    if (key === 'device' || key === 'monitors') continue;
+    if (AUTO_TARGET[key]) { if (key === 'cpu' || key === 'gpu') { if (setup.device && !setup.manual.includes(key)) continue; } set(key, setup, AUTO_TARGET[key], d[AUTO_TARGET[key]]); }
+    else if (key in (d.peripherals || {})) set(key, setup.peripherals, key, d.peripherals[key]);
+    else if (key in (d.background || {})) set(key, setup.background, key, d.background[key]);
+  }
+  if (d.cpuCores && !setup.manual.includes('cpuCores')) setup.cpuCores = d.cpuCores;
+  if (d.vram && !setup.manual.includes('vram')) setup.vram = d.vram;
+  if (d.monitors && !setup.manual.includes('monitors')) {
+    const prev = setup.monitors;
+    const next = d.monitors.map((nm, i) => { const pm = prev[i] || {}; const keep = pm.manual || []; const merged = { ...nm, manual: keep };
+      for (const k of ['vrr', 'vrrType', 'hdr', 'dsc', 'video']) if (pm[k] !== undefined && (keep.includes(k) || keep.includes(k.replace('Type', '')) || pm.model === nm.model)) merged[k] = pm[k];
+      if (keep.includes('link') && pm.link) merged.link = pm.link; if (keep.includes('hz') && pm.hz) merged.hz = pm.hz; if (keep.includes('res')) { merged.w = pm.w; merged.h = pm.h; }
+      return merged; });
+    if (JSON.stringify(next.map((x) => [x.w, x.h, x.hz, x.model])) !== JSON.stringify(prev.map((x) => [x.w, x.h, x.hz, x.model]))) changes.push('monitors');
+    setup.monitors = next;
+  }
+  setup.autoFields = m.auto; setup.hints = m.hints || {};
+  simpleFields.forEach((id) => writeField(id, setup[keyMap[id] || id])); periFields.forEach((id) => writeField(id, setup.peripherals[id])); bgFields.forEach((id) => writeField(id, setup.background[id]));
+  $('device').value = setup.device || ''; renderMonitors(); fillRes(); saveSetup(); refreshSetupWarnings();
+  return changes;
+}
+async function detect(quiet = false) {
+  if (!isDesktopApp) { alert('Hardware detection needs the desktop app. In the browser, pick parts manually or choose a device preset.'); return; }
   $('btnDetect').textContent = 'Detecting…';
   try {
     const hw = await window.optimizer.detect();
-    const m = matchHardware(hw, { GPUS, CPUS });
-    Object.assign(setup, m.setup);
-    simpleFields.forEach((id) => writeField(id, setup[keyMap[id] || id])); renderMonitors(); fillRes(); saveSetup(); refreshSetupWarnings();
-    alert(`Detected:\n${m.summary.join('\n')}`);
-  } catch (e) { alert('Detection failed: ' + e.message); }
+    const m = matchHardware(hw, { GPUS, CPUS, DEVICES });
+    const changes = applyDetection(m);
+    const b = $('detectBanner'); b.hidden = false;
+    b.textContent = quiet ? (changes.length ? `Hardware re-detected on launch. Updated: ${changes.join(', ')}. Your manual entries were kept.` : 'Hardware re-detected on launch. No changes.') : `Detected: ${m.summary.join(' · ')}`;
+  } catch (e) { if (!quiet) alert('Detection failed: ' + e.message); }
   $('btnDetect').textContent = 'Detect my hardware';
+}
+
+/* ---------- Guidance ---------- */
+const CHECKBOX_HELP = ['discordOverlay', 'rgbSoftware', 'browserVideo'];
+function fieldStatus(key) {
+  if (setup.manual.includes(key)) return 'manual';
+  if ((setup.autoFields || []).includes(key)) return 'auto';
+  return 'check';
+}
+function refreshChips() {
+  document.querySelectorAll('[data-chip]').forEach((c) => { const st = fieldStatus(c.dataset.chip); c.className = 'chip ' + st; c.textContent = st === 'auto' ? 'Auto' : st === 'manual' ? 'Set by you' : 'Check'; });
+  const list = $('checklist'); if (!list) return; list.innerHTML = '';
+  const keys = Object.keys(HELP).filter((k) => $(k) || k === 'monitors').filter((k) => k !== 'powerMode' || !$('powerModeWrap').hidden).filter((k) => k !== 'laptopMode' || setup.form === 'laptop').filter((k) => k !== 'igpuVram' || resolveGpu(engineSetup()).family === 'igpu').filter((k) => k !== 'psuW' || setup.form === 'desktop').filter((k) => k !== 'hubDevices' || setup.peripherals.hubGen !== 'none');
+  const todo = keys.filter((k) => k === 'monitors' ? setup.monitors.some((m) => !m.builtin && !(m.manual || []).includes('vrr')) : fieldStatus(k) === 'check');
+  $('checklistCount').textContent = todo.length ? `${todo.length} item${todo.length > 1 ? 's' : ''} need a quick check` : 'All set';
+  todo.forEach((k) => list.append(el('div', { onclick: () => { const t = k === 'monitors' ? $('monitors') : $(k); t.scrollIntoView({ behavior: 'smooth', block: 'center' }); const h = document.querySelector(`details.help[data-for="${k}"]`); if (h) h.open = true; } }, `→ ${labelFor(k)}`)));
+}
+function labelFor(k) { if (k === 'monitors') return 'Monitors: VRR / HDR / cable'; const lab = $(k)?.closest('label'); return lab ? lab.firstChild.textContent.trim() : k; }
+function decorate() {
+  const ctx = () => ({ systemName: setup.systemName });
+  Object.keys(HELP).forEach((k) => {
+    if (k === 'monitors') { const h = helpBlock(k, ctx); h.dataset.for = k; $('monitors').after(h); return; }
+    const f = $(k); if (!f) return; const lab = f.closest('label'); if (!lab) return;
+    const chip = el('span', { 'data-chip': k }); (lab.firstChild && lab.firstChild.nodeType === 3 ? lab.firstChild.after(chip) : lab.prepend(chip));
+    if (CHECKBOX_HELP.includes(k)) { lab.title = [HELP[k].auto, ...HELP[k].steps].join(' '); return; }
+    const h = helpBlock(k, ctx, { polling: () => pollingTester((rate) => { setup.peripherals.mousePolling = rate; writeField('mousePolling', rate); markManual('mousePolling'); saveSetup(); refreshSetupWarnings(); }) });
+    h.dataset.for = k; lab.after(h);
+  });
+  $('measureHelp').append(measureBlock());
+  refreshChips();
 }
 
 /* ---------- Shell ---------- */
 function showTab(id) { document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === id)); document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + id)); }
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
-$('btnDetect').onclick = detect;
+$('btnDetect').onclick = () => detect(false);
+$('autoDetect').checked = setup.autoDetect !== false; $('autoDetect').onchange = () => { setup.autoDetect = $('autoDetect').checked; saveSetup(); };
 $('btnExport').onclick = () => { const a = el('a', { href: 'data:application/json,' + encodeURIComponent(JSON.stringify(setup, null, 2)), download: 'my-setup.json' }); a.click(); };
 $('fileImport').onchange = async (ev) => { const f = ev.target.files[0]; if (!f) return; setup = { ...defaultSetup(), ...JSON.parse(await f.text()) }; saveSetup(); location.reload(); };
-initSetup(); initGames();
+initSetup(); initGames(); decorate();
+if (isDesktopApp && setup.autoDetect !== false) detect(true);
 window.__app = { engineSetup, setup: () => setup, runRecommend };
