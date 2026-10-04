@@ -47,7 +47,8 @@ test('recommender meets target when hardware allows and respects engine caps', (
   // low-end: target unreachable -> fallback resolution offered
   const weak = { gpu: 'NVIDIA GeForce GTX 1650', cpu: 'Intel Core i5-9400F', ramGB: 16, monitors: [{ w: 3840, h: 2160, hz: 144, vrr: false, link: 'HDMI2.0' }] };
   const w = recommend(weak, GAME_BY_ID.alanwake2, { mode: 'refresh' });
-  assert.ok(!w.anyMeets);
+  assert.ok(w.tierFallback || !w.anyMeets, 'unreachable goal falls back to a lower smooth tier');
+  if (w.tierFallback) { assert.ok(w.tierFallback.to < 144); assert.ok(w.best.est.fps >= w.tierFallback.to - 0.5); }
 });
 
 test('system factors: single channel, HDD, 8k polling, extra monitors', () => {

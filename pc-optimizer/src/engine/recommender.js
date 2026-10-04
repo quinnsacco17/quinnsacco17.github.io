@@ -102,11 +102,19 @@ export function recommend(setup, game, opts) {
   const anyMeets = candidates.some((c) => c.meets);
   // Resolution fallback if nothing meets
   let resFallback = null;
-  if (!anyMeets && !competitive) {
+  if (!anyMeets && !competitive && !opts._noFallback) {
     const lower = [[2560, 1440], [1920, 1080], [1600, 900], [1280, 720]].filter(([lw]) => lw < w);
     for (const [lw, lh] of lower) {
-      const r = recommend(setup, game, { ...opts, w: lw, h: lh, _noFallback: true });
+      const r = recommend(setup, game, { ...opts, w: lw, h: lh, _noFallback: true, _tier: true });
       if (r.best.meets) { resFallback = { w: lw, h: lh, est: r.best.est }; break; }
+    }
+  }
+  // Goal unreachable: drop to the highest smooth fps tier this hardware can hold, then maximize visuals there.
+  if (!anyMeets && !competitive && !opts._tier) {
+    const tiers = [144, 120, 100, 90, 75, 60, 50, 45, 40, 30].filter((t) => t < target && (mon.vrr ? t >= 40 || t === 30 : mon.hz % t === 0));
+    for (const t of tiers) {
+      const r = recommend(setup, game, { ...opts, mode: 'quality', targetFps: t, w, h, _tier: true });
+      if (r.anyMeets) return { ...r, mode, tierFallback: { from: target, to: t }, resFallback };
     }
   }
   return { target, lowsTarget, mode, w, h, best, candidates: candidates.slice(0, 12), anyMeets, resFallback, frameCap: frameCapAdvice(setup, best.est, mon, game, competitive) };

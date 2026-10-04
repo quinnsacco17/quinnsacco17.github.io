@@ -9,23 +9,46 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div id="wizard" class="wizard" hidden></div>
 <header>
-  <h1>Setup Optimizer</h1>
-  <nav>
-    <button data-tab="setup" class="active">1. Your setup</button>
-    <button data-tab="games">2. Game settings</button>
-    <button data-tab="overview">3. All games</button>
-    <button data-tab="calibrate">4. Calibrate</button>
+  <div class="brand"><span class="logo"></span>Setup Optimizer</div>
+  <nav class="mainnav">
+    <button data-view="games" class="active">Games</button>
+    <button data-view="setup">My setup</button>
   </nav>
-  <div class="hdr-actions">
-    <button id="btnDetect" title="Reads the real hardware on this machine (desktop app only)">Detect my hardware</button>
-    <button id="btnExport">Export setup</button>
-    <label class="filebtn">Import<input type="file" id="fileImport" accept="application/json"></label>
-  </div>
 </header>
-
 <main>
-<section id="tab-setup" class="tab active">
+<section id="view-games" class="view active">
+  <div id="gamesHome">
+    <div class="goal-row" id="goalChips"></div>
+    <div class="search-row"><input id="gameSearch" type="search" placeholder="Search games"></div>
+    <div id="gameGrid" class="game-grid"></div>
+    <details class="subtle"><summary>Options: resolution and custom fps target</summary><div class="game-options">
+    <select id="game" hidden></select>
+    <select id="targetMode" hidden></select>
+    <label id="targetFpsWrap" hidden>Target fps<input type="number" id="targetFps" value="90" min="20" max="600"></label>
+    <label>Render resolution<select id="res"></select></label>
+    <button id="btnRecommend" class="primary" hidden>Recommend</button>
+  </div>
+  <div id="goalDesc" class="notes"></div></details>
+  </div>
+  <div id="result"></div>
+</section>
+<section id="view-setup" class="view">
+  <div id="setupSummary"></div>
+  <details id="advancedBox" class="advanced">
+    <summary>Advanced: edit every part, calibrate, compare all games</summary>
+    <div class="adv-actions">
+      <button id="btnDetect">Detect my hardware</button>
+      <button id="btnExport">Export setup</button>
+      <label class="filebtn">Import setup<input type="file" id="fileImport" accept="application/json"></label>
+    </div>
+    <nav class="subnav">
+      <button data-tab="setup" class="active">Parts and connections</button>
+      <button data-tab="calibrate">Calibrate</button>
+      <button data-tab="overview">All games</button>
+    </nav>
+    <section id="tab-setup" class="tab active">
   <div id="detectBanner" class="banner" hidden></div>
   <div class="card"><h2>Setup checklist · <span id="checklistCount"></span></h2><div class="notes">Green "Auto" fields were read from this machine. Yellow "Check" fields need you: click one to jump to it and open its step-by-step help.</div><div id="checklist" class="checklist"></div><label class="chk" style="flex-direction:row;align-items:center;gap:6px;color:var(--text)"><input type="checkbox" id="autoDetect"> Re-detect hardware every time the app opens (keeps anything you set by hand)</label></div>
   <div class="grid2">
@@ -72,25 +95,7 @@
     </div>
   </div>
 </section>
-
-<section id="tab-games" class="tab">
-  <div class="card controls">
-    <label>Game<select id="game"></select></label>
-    <label>Goal<select id="targetMode"></select></label>
-    <label id="targetFpsWrap" hidden>Target fps<input type="number" id="targetFps" value="90" min="20" max="600"></label>
-    <label>Render resolution<select id="res"></select></label>
-    <button id="btnRecommend" class="primary">Recommend settings</button>
-  </div>
-  <div id="goalDesc" class="notes"></div>
-  <div id="result"></div>
-</section>
-
-<section id="tab-overview" class="tab">
-  <div class="card controls"><label>Goal<select id="ovMode"></select></label><button id="btnOverview" class="primary">Run all games</button></div>
-  <div id="overview"></div>
-</section>
-
-<section id="tab-calibrate" class="tab">
+    <section id="tab-calibrate" class="tab">
   <div class="card">
     <h2>Calibrate to your real machine</h2>
     <p>The model rescales your GPU and CPU to match one real measurement. Here is how to get it:</p><div id="measureHelp"></div>
@@ -110,8 +115,14 @@
     <div id="calResult" class="notes"></div>
   </div>
 </section>
+    <section id="tab-overview" class="tab">
+  <div class="card controls"><label>Goal<select id="ovMode"></select></label><button id="btnOverview" class="primary">Run all games</button></div>
+  <div id="overview"></div>
+</section>
+  </details>
+</section>
 </main>
-<footer>Estimates use published benchmark averages. Uncalibrated error is about ±15%; calibrated about ±7%. Patches, drivers, scene, and thermals move real numbers.</footer>
+<footer>Estimates use published benchmark averages: about ±15% before calibration, ±7% after.</footer>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -17,18 +17,25 @@ function createWindow() {
     win.webContents.once('did-finish-load', async () => {
       try {
         const r = await win.webContents.executeJavaScript(`(async () => {
-          const out = { bridge: typeof window.optimizer, app: typeof window.__app };
-          document.getElementById('gpu').value = 'NVIDIA GeForce RTX 4070'; document.getElementById('gpu').dispatchEvent(new Event('change'));
-          document.getElementById('cpu').value = 'AMD Ryzen 5 7600'; document.getElementById('cpu').dispatchEvent(new Event('change'));
-          document.querySelector('nav button[data-tab=games]').click(); document.getElementById('game').value = 'cyberpunk'; document.getElementById('btnRecommend').click();
-          out.kpis = [...document.querySelectorAll('.kpi .v')].map((e) => e.textContent);
-          out.applyBtn = !![...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Apply to game'));
-          const hw = await window.optimizer.detect(); out.detect = { cpu: hw.cpu && hw.cpu.brand, mem: hw.mem && hw.mem.total };
-          const ap = await window.optimizer.applySettings('nope', {}); out.applyUnknown = ap.ok;
-          await new Promise((r) => setTimeout(r, 4000)); out.banner = document.getElementById('detectBanner').textContent; out.checklist = document.getElementById('checklistCount').textContent; out.autoChips = document.querySelectorAll('.chip.auto').length;
-          out.openDisplay = await window.optimizer.open('display'); out.openBogus = await window.optimizer.open('rm -rf'); out.searchUnknown = await window.optimizer.open('monitor-specs', 'evil');
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          const click = (sel, text) => { const el = [...document.querySelectorAll(sel)].find((e) => !text || e.textContent.includes(text)); if (!el) throw new Error('missing ' + sel + ' ' + (text || '')); el.click(); };
+          const out = { bridge: typeof window.optimizer };
+          localStorage.clear(); location.reload(); return 'reloaded'; })()`);
+        if (r === 'reloaded') { await new Promise((res) => win.webContents.once('did-finish-load', res)); }
+        const r2 = await win.webContents.executeJavaScript(`(async () => {
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          const click = (sel, text) => { const el = [...document.querySelectorAll(sel)].find((e) => !text || e.textContent.includes(text)); if (!el) throw new Error('missing ' + sel + ' ' + (text || '')); el.click(); };
+          const out = { wizardOpen: !document.getElementById('wizard').hidden };
+          await sleep(6000); out.afterScan = document.querySelector('.wiz-card h1')?.textContent; out.found = document.querySelector('.wiz-found')?.textContent;
+          click('.wiz-buttons button', 'pick'); await sleep(100); click('.wiz-tile', 'Handheld'); await sleep(100); click('.wiz-tile', 'Z1 Extreme'); await sleep(100);
+          click('.wiz-tile', 'Turbo (25W'); await sleep(100); click('.wiz-tile', 'Smoothest'); await sleep(100); click('button', 'Show me my games'); await sleep(200);
+          out.wizardClosed = document.getElementById('wizard').hidden; out.tiles = document.querySelectorAll('.game-tile').length;
+          click('.game-tile', 'Cyberpunk'); await sleep(300);
+          out.hero = document.querySelector('.hero-fps')?.textContent; out.status = document.querySelector('.status')?.textContent; out.applyBtn = !![...document.querySelectorAll('button')].find((b) => b.textContent === 'Apply to game');
+          click('.mainnav button', 'My setup'); await sleep(200); out.summaryDevice = document.querySelector('.summary-card .set-row strong')?.textContent;
+          out.openBogus = (await window.optimizer.open('rm -rf')).ok; out.searchUnknown = (await window.optimizer.open('monitor-specs', 'evil')).ok;
           return out; })()`);
-        console.log('SMOKE', JSON.stringify(r));
+        console.log('SMOKE', JSON.stringify(r2));
       } catch (e) { console.log('SMOKE_ERROR', e.message); }
       app.exit(0);
     });

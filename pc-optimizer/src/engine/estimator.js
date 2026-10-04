@@ -189,10 +189,11 @@ export function estimate(setup, game, config) {
     baseFps = base2; fps = base2 * fgOpt.mult;
     if (base2 < 50) fgNote = `Frame gen from a ${Math.round(base2)} fps base: input latency and artifacts will be obvious. Needs 55-60+ base.`;
   }
-  if (game.cap) fps = Math.min(fps, game.cap);
+  let lowsFps = fps * lows;
+  if (game.cap) { fps = Math.min(fps, game.cap); lowsFps = Math.min(lowsFps, game.cap); }
   const uncertainty = setup.calibration ? 0.07 : 0.14;
   return {
-    fps, baseFps, lows: fps * lows, gpuMs, cpuMs, frameMs, bottleneck: gpuBound ? 'GPU' : cpuBound ? 'CPU' : 'Balanced', vram, vramAvail, vramOver, fgNote, capped: game.cap && fps >= game.cap - 0.5,
+    fps, baseFps, lows: lowsFps, gpuMs, cpuMs, frameMs, bottleneck: gpuBound ? 'GPU' : cpuBound ? 'CPU' : 'Balanced', vram, vramAvail, vramOver, fgNote, capped: game.cap && fps >= game.cap - 0.5,
     range: [fps * (1 - uncertainty), fps * (1 + uncertainty)], uncertainty, factors: f, gpu, cpu,
   };
 }

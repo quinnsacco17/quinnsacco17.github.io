@@ -81,7 +81,7 @@ function applyDevice(fill) {
   (d.notes || []).forEach((n) => $('deviceNotes').append(el('div', {}, '• ' + n)));
   if (fill) {
     Object.assign(setup, { cpu: d.cpu, gpu: d.gpu, ramGB: d.ramGB, ramChannels: d.ramChannels, ramType: d.ramType, storage: d.storage === 'nvme' ? 'nvme4' : d.storage, form: d.type === 'console' ? 'desktop' : d.type, psuW: d.psuW || '', cpuIdx: '', gpuIdx: '', vram: '', powerModeIdx: d.defaultPower, igpuVramGB: d.type === 'handheld' ? 6 : 4 });
-    if (d.display) setup.monitors = [{ ...d.display, link: 'internal', dsc: true, video: false, vrrType: 'freesync' }, ...setup.monitors.filter((m) => !m.builtin)];
+    if (d.display) setup.monitors = [{ ...d.display, link: 'internal', dsc: true, video: false, vrrType: 'freesync' }, ...setup.monitors.filter((m) => !m.builtin && m.link !== "internal" && (m.model || (m.manual || []).length))];
     simpleFields.forEach((id) => writeField(id, setup[keyMap[id] || id])); renderMonitors();
   }
 }
@@ -148,56 +148,55 @@ function runRecommend() {
   renderResult(rec, game, es);
 }
 function kpi(l, v, cls = '') { return el('div', { class: 'kpi ' + cls }, el('div', { class: 'v' }, v), el('div', { class: 'l' }, l)); }
+const APPLY_SUPPORTED = ['cyberpunk', 'fortnite', 'rivals', 'finals', 'palworld', 'wukong', 'stalker2', 'oblivion', 'expedition33', 'pubg', 'cs2', 'apex', 'minecraft', 'eldenring', 'ow2'];
 function renderResult(rec, game, es) {
   const r = $('result'); r.innerHTML = '';
+  $('gamesHome').hidden = true;
   const b = rec.best, e = b.est, gpu = e.gpu;
-  const meetsCls = b.meets ? 'ok' : e.fps >= rec.target * 0.85 ? 'warn' : 'bad';
-  const card = el('div', { class: 'card' });
-  card.append(el('h2', {}, `${game.name} at ${rec.w}x${rec.h} · goal ${fmt(rec.target)} fps`));
-  card.append(el('div', { class: 'kpis' }, kpi('Predicted average', `${fmt(e.fps)} fps`, meetsCls), kpi('Likely range', `${fmt(e.range[0])}-${fmt(e.range[1])}`), kpi('1% lows (est.)', `${fmt(e.lows)} fps`, e.lows >= rec.lowsTarget ? 'ok' : 'warn'), kpi('Bottleneck', e.bottleneck), kpi('VRAM needed', `${e.vram.toFixed(1)} / ${e.vramAvail} GB`, e.vramOver ? 'bad' : 'ok'), kpi('Visual score', `${b.vis.toFixed(1)} / 10`)));
-  if (!b.meets) {
-    const msg = el('div', { class: 'warnings' });
-    msg.append(el('div', {}, `This hardware cannot hold ${fmt(rec.target)} fps in ${game.name} at ${rec.w}x${rec.h} even at minimum settings${rec.resFallback ? '' : ' or lower resolutions'}. Shown: the fastest configuration that still looks acceptable.`));
-    if (rec.resFallback) msg.append(el('div', { class: 'info' }, `Dropping to ${rec.resFallback.w}x${rec.resFallback.h} reaches ~${fmt(rec.resFallback.est.fps)} fps. Change "Render resolution" above to see those settings.`));
-    card.append(msg);
-  }
-  if (e.capped) card.append(el('div', { class: 'notes' }, `Engine cap of ${game.cap} fps reached; headroom is spent on visuals.`));
-  const pills = el('div', {}, el('span', { class: 'pill' }, `Upscaler: ${b.up ? `${b.up.name} ${UPSCALE_MODES.find((m) => m.id === b.cfg.mode).name}` : 'Off (native)'}`), el('span', { class: 'pill' }, `Frame gen: ${b.fg.name}`), game.rt ? el('span', { class: 'pill' }, `Ray tracing: ${game.rt.modes[b.cfg.rtIndex].name}`) : '', el('span', { class: 'pill' }, `${gpu.vendor === 'NVIDIA' ? 'Reflex' : gpu.vendor === 'AMD' ? 'Anti-Lag 2' : 'XeLL'}: On`));
-  card.append(pills);
-  if (e.fgNote) card.append(el('div', { class: 'warnings' }, el('div', {}, e.fgNote)));
-  // settings + preview
-  const grid = el('div', { class: 'settings-grid' });
-  const tbl = el('table'); tbl.append(el('tr', {}, el('th', {}, 'Setting'), el('th', {}, 'Use'), el('th', {}, 'What you will notice')));
   const live = { ...b.cfg, settings: [...b.cfg.settings] };
+  const upName = b.up ? `${b.up.name} ${UPSCALE_MODES.find((m) => m.id === live.mode).name.replace(/ \(.*\)/, '')}` : 'Off';
+  const status = rec.tierFallback ? ['warn', `${fmt(rec.tierFallback.from)} fps isn\u2019t reachable here. Tuned for a steady ${fmt(rec.tierFallback.to)} fps instead.`] : b.meets ? ['ok', `Hits your ${fmt(rec.target)} fps goal`] : e.fps >= rec.target * 0.85 ? ['warn', `Just under your ${fmt(rec.target)} fps goal`] : ['bad', `Can't reach ${fmt(rec.target)} fps here. This is the best it can do.`];
+  const hero = el('div', { class: 'hero' },
+    el('button', { class: 'back', type: 'button', onclick: () => { r.innerHTML = ''; $('gamesHome').hidden = false; } }, '← All games'),
+    el('div', { class: 'hero-title' }, game.name),
+    el('div', { class: 'hero-fps' }, el('span', { class: 'num' }, fmt(e.fps)), el('span', { class: 'unit' }, 'fps average')),
+    el('div', { class: 'status ' + status[0] }, status[1]),
+    el('div', { class: 'hero-sub' }, `${rec.w}x${rec.h} · Upscaling: ${upName}${b.fg.id !== 'off' ? ' · Frame generation on' : ''}${game.rt && live.rtIndex ? ' · Ray tracing on' : ''}`));
+  const actions = el('div', { class: 'hero-actions' });
+  if (isDesktopApp && APPLY_SUPPORTED.includes(game.id)) actions.append(el('button', { class: 'big primary', type: 'button', onclick: () => applyToGame(game, live, b, rec) }, 'Apply to game'));
+  actions.append(el('button', { class: 'big' + (isDesktopApp && APPLY_SUPPORTED.includes(game.id) ? '' : ' primary'), type: 'button', onclick: () => copyText(settingsText(game, live, b, e, rec)) }, 'Copy settings'));
+  if (!(isDesktopApp && APPLY_SUPPORTED.includes(game.id))) actions.append(el('div', { class: 'notes' }, isDesktopApp ? 'This game stores settings where the app can’t write them. Set these in the game’s menu.' : 'Set these in the game’s menu.'));
+  hero.append(actions);
+  // Settings list
+  const list = el('div', { class: 'set-list' });
+  const rows = game.settings.map((s, i) => [s.name, s.options[live.settings[i]]]);
+  if (game.rt) rows.push(['Ray tracing', game.rt.modes[live.rtIndex].name]);
+  rows.push(['Upscaling', upName], ['Frame generation', b.fg.name], [gpu.vendor === 'NVIDIA' ? 'NVIDIA Reflex' : gpu.vendor === 'AMD' ? 'AMD Anti-Lag' : 'Low latency mode', 'On']);
+  rows.forEach(([k, v]) => list.append(el('div', { class: 'set-row' }, el('span', {}, k), el('strong', {}, v))));
+  const capTip = rec.frameCap[0] ? el('div', { class: 'tip' }, rec.frameCap[0]) : '';
+  // Details
+  const det = el('details', { class: 'more' }, el('summary', {}, 'More details: tweak settings, preview, alternatives'));
+  det.append(el('div', { class: 'kpis' }, kpi('Likely range', `${fmt(e.range[0])}-${fmt(e.range[1])}`), kpi('1% lows', `${fmt(e.lows)} fps`), kpi('Limited by', e.bottleneck), kpi('Video memory', `${e.vram.toFixed(1)} / ${e.vramAvail} GB`, e.vramOver ? 'bad' : '')));
+  if (!b.meets && rec.resFallback) det.append(el('div', { class: 'tip' }, `Dropping to ${rec.resFallback.w}x${rec.resFallback.h} reaches about ${fmt(rec.resFallback.est.fps)} fps. Change it under Options on the games screen.`));
+  if (e.fgNote) det.append(el('div', { class: 'tip warn' }, e.fgNote));
+  const grid = el('div', { class: 'settings-grid' });
+  const tbl = el('table'); tbl.append(el('tr', {}, el('th', {}, 'Setting'), el('th', {}, 'Use'), el('th', {}, 'What you’ll notice')));
   const canvas = el('canvas', { id: 'preview', width: 640, height: 360 });
-  const redraw = () => { const st = {}; game.settings.forEach((s, i) => { st[s.key] = live.settings[i]; }); st.rt = live.rtIndex; st.upscale = UPSCALE_MODES.find((m) => m.id === live.mode).scale; st.upTech = b.up?.tech; renderPreview(canvas, st); const e2 = estimate(es, game, live); liveFps.textContent = `Live estimate with your tweaks: ${fmt(e2.fps)} fps avg, ${fmt(e2.lows)} lows, VRAM ${e2.vram.toFixed(1)} GB`; };
-  game.settings.forEach((s, i) => {
-    const sel = el('select'); s.options.forEach((o, j) => sel.append(el('option', { value: j }, o))); sel.value = live.settings[i];
-    sel.onchange = () => { live.settings[i] = +sel.value; redraw(); explain.textContent = (SETTING_EXPLAIN[s.key] || [])[live.settings[i]] || ''; };
-    const explain = el('td', {}, (SETTING_EXPLAIN[s.key] || [])[live.settings[i]] || '');
-    tbl.append(el('tr', {}, el('td', {}, s.name), el('td', {}, sel), explain));
-  });
-  if (game.rt) { const sel = el('select'); game.rt.modes.forEach((m, j) => sel.append(el('option', { value: j }, m.name))); sel.value = live.rtIndex; sel.onchange = () => { live.rtIndex = +sel.value; redraw(); }; tbl.append(el('tr', {}, el('td', {}, 'Ray Tracing'), el('td', {}, sel), el('td', {}, 'RT shadows/reflections/GI are physically accurate but cost 30-70% fps; path tracing 3x.'))); }
-  { const sel = el('select'); UPSCALE_MODES.forEach((m) => { if (m.id === 'native' || b.up) sel.append(el('option', { value: m.id }, m.name)); }); sel.value = live.mode; sel.onchange = () => { live.mode = sel.value; redraw(); }; tbl.append(el('tr', {}, el('td', {}, `Upscaling${b.up ? ` (${b.up.name})` : ''}`), el('td', {}, sel), el('td', {}, b.up ? 'Quality mode is near-free visually on DLSS 4 / FSR 4; FSR 3 below Quality gets shimmery.' : 'No upscaler available for this GPU/game combination.'))); }
   const liveFps = el('div', { class: 'notes' });
-  grid.append(el('div', {}, tbl, liveFps), el('div', {}, canvas, el('div', { class: 'notes' }, 'Preview reacts to the dropdowns on the left. It shows the kind of difference each setting makes, not the actual game.')));
-  card.append(grid); redraw();
-  // frame cap + tips + warnings
-  const adv = el('div', { class: 'notes' }); rec.frameCap.forEach((t) => adv.append(el('div', {}, '• ' + t))); game.tips.forEach((t) => adv.append(el('div', {}, '• ' + t)));
-  if (b.log.length) adv.append(el('div', {}, `Reduced from max: ${b.log.join('; ')}`));
-  card.append(el('h2', {}, 'Frame cap, sync, and game-specific notes'), adv);
-  const f = e.factors; if (f.warnings.length) { const w = el('div', { class: 'warnings' }); f.warnings.forEach((t) => w.append(el('div', {}, t))); card.append(el('h2', {}, 'Setup issues affecting this result'), w); }
-  // apply / copy
-  const actions = el('div', { class: 'row' });
-  actions.append(el('button', { onclick: () => copyText(settingsText(game, live, b, e, rec)) }, 'Copy settings list'));
-  if (isDesktopApp) actions.append(el('button', { class: 'primary', onclick: () => applyToGame(game, live, b, rec) }, 'Apply to game (writes config file)'));
-  else actions.append(el('span', { class: 'notes' }, 'Auto-apply to the game is available in the Windows app build.'));
-  card.append(el('h2', {}, 'Apply'), actions);
-  // alternatives
-  const alt = el('table'); alt.append(el('tr', {}, el('th', {}, 'Alternative'), el('th', {}, 'Avg fps'), el('th', {}, 'Lows'), el('th', {}, 'Visual'), el('th', {}, 'Meets goal')));
-  rec.candidates.slice(0, 8).forEach((c) => { const row = el('tr', { class: 'alt', onclick: () => { rec.best = c; renderResult(rec, game, es); } }, el('td', {}, `${c.up ? c.up.name + ' ' + UPSCALE_MODES.find((m) => m.id === c.cfg.mode).name : 'Native'} · FG ${c.fg.name} · RT ${game.rt ? game.rt.modes[c.cfg.rtIndex].name : 'n/a'} · ${c.log.length ? c.log.length + ' settings reduced' : 'all max'}`), el('td', {}, fmt(c.est.fps)), el('td', {}, fmt(c.est.lows)), el('td', {}, c.vis.toFixed(1)), el('td', {}, c.meets ? '✓' : '—')); alt.append(row); });
-  card.append(el('h2', {}, 'Other viable configurations (click to inspect)'), alt);
-  r.append(card);
+  const redraw = () => { const st = {}; game.settings.forEach((s, i) => { st[s.key] = live.settings[i]; }); st.rt = live.rtIndex; st.upscale = UPSCALE_MODES.find((m) => m.id === live.mode).scale; st.upTech = b.up?.tech; renderPreview(canvas, st); const e2 = estimate(es, game, live); liveFps.textContent = `With your changes: ${fmt(e2.fps)} fps average, ${fmt(e2.lows)} lows. "Apply" and "Copy" use your changes.`; };
+  game.settings.forEach((s, i) => { const sel = el('select'); s.options.forEach((o, j) => sel.append(el('option', { value: j }, o))); sel.value = live.settings[i]; const ex = el('td', {}, (SETTING_EXPLAIN[s.key] || [])[live.settings[i]] || ''); sel.onchange = () => { live.settings[i] = +sel.value; ex.textContent = (SETTING_EXPLAIN[s.key] || [])[live.settings[i]] || ''; redraw(); }; tbl.append(el('tr', {}, el('td', {}, s.name), el('td', {}, sel), ex)); });
+  if (game.rt) { const sel = el('select'); game.rt.modes.forEach((m, j) => sel.append(el('option', { value: j }, m.name))); sel.value = live.rtIndex; sel.onchange = () => { live.rtIndex = +sel.value; redraw(); }; tbl.append(el('tr', {}, el('td', {}, 'Ray tracing'), el('td', {}, sel), el('td', {}, 'Big visual upgrade, big fps cost.'))); }
+  { const sel = el('select'); UPSCALE_MODES.forEach((m) => { if (m.id === 'native' || b.up) sel.append(el('option', { value: m.id }, m.name)); }); sel.value = live.mode; sel.onchange = () => { live.mode = sel.value; redraw(); }; tbl.append(el('tr', {}, el('td', {}, 'Upscaling'), el('td', {}, sel), el('td', {}, 'Renders lower and sharpens up. Quality mode looks close to native.'))); }
+  grid.append(el('div', {}, tbl, liveFps), el('div', {}, canvas, el('div', { class: 'notes' }, 'Illustration of what each setting changes, not real game footage.')));
+  det.append(el('h3', {}, 'Tweak settings'), grid); redraw();
+  const adv = el('div', { class: 'notes' }); rec.frameCap.slice(1).forEach((t) => adv.append(el('div', {}, '• ' + t))); game.tips.forEach((t) => adv.append(el('div', {}, '• ' + t)));
+  det.append(el('h3', {}, 'Tips for this game'), adv);
+  const f = e.factors; if (f.warnings.length) { const w = el('div', { class: 'warnings' }); f.warnings.forEach((t) => w.append(el('div', {}, t))); det.append(el('h3', {}, 'Things in your setup holding this back'), w); }
+  const alt = el('table'); alt.append(el('tr', {}, el('th', {}, 'Other option'), el('th', {}, 'fps'), el('th', {}, 'Looks'), el('th', {}, 'Goal')));
+  rec.candidates.slice(0, 6).forEach((c) => alt.append(el('tr', { class: 'alt', onclick: () => { rec.best = c; renderResult(rec, game, es); window.scrollTo(0, 0); } }, el('td', {}, `${c.up ? c.up.name + ' ' + UPSCALE_MODES.find((m) => m.id === c.cfg.mode).name.replace(/ \(.*\)/, '') : 'No upscaling'}${c.fg.id !== 'off' ? ' + frame gen' : ''}${game.rt && c.cfg.rtIndex ? ' + ray tracing' : ''}`), el('td', {}, fmt(c.est.fps)), el('td', {}, c.vis.toFixed(1) + '/10'), el('td', {}, c.meets ? '✓' : '—'))));
+  det.append(el('h3', {}, 'Other ways to run it (tap to use)'), alt);
+  r.append(el('div', { class: 'result-card' }, hero, capTip, list, det));
+  window.scrollTo(0, 0);
 }
 function settingsText(game, cfg, b, e, rec) {
   const lines = [`${game.name} — ${rec.w}x${rec.h} — predicted ${fmt(e.fps)} fps (lows ${fmt(e.lows)})`];
@@ -223,7 +222,7 @@ function runOverview() {
     const ultra = estimate(es, g, baseConfig(g, mon.w, mon.h));
     const r = recommend(es, g, { mode, targetFps: +$('targetFps').value, w: mon.w, h: mon.h });
     const b = r.best;
-    t.append(el('tr', { class: 'alt', onclick: () => { $('game').value = g.id; $('targetMode').value = mode; $('targetMode').dispatchEvent(new Event('change')); showTab('games'); runRecommend(); } }, el('td', {}, g.name), el('td', {}, `${fmt(ultra.fps)} fps`), el('td', {}, `${b.log.length ? b.log.length + ' reduced' : 'max'} · ${b.up ? b.up.name + ' ' + b.cfg.mode : 'native'}${b.fg.id !== 'off' ? ' · FG' : ''}${g.rt && b.cfg.rtIndex ? ' · RT' : ''}`), el('td', {}, fmt(b.est.fps)), el('td', {}, fmt(b.est.lows)), el('td', {}, b.est.bottleneck), el('td', {}, b.meets ? '✓' : `✗ (goal ${fmt(r.target)})`)));
+    t.append(el('tr', { class: 'alt', onclick: () => { $('game').value = g.id; $('targetMode').value = mode; $('targetMode').dispatchEvent(new Event('change')); showView('games'); runRecommend(); } }, el('td', {}, g.name), el('td', {}, `${fmt(ultra.fps)} fps`), el('td', {}, `${b.log.length ? b.log.length + ' reduced' : 'max'} · ${b.up ? b.up.name + ' ' + b.cfg.mode : 'native'}${b.fg.id !== 'off' ? ' · FG' : ''}${g.rt && b.cfg.rtIndex ? ' · RT' : ''}`), el('td', {}, fmt(b.est.fps)), el('td', {}, fmt(b.est.lows)), el('td', {}, b.est.bottleneck), el('td', {}, b.meets ? '✓' : `✗ (goal ${fmt(r.target)})`)));
   });
   wrap.append(el('div', { class: 'card' }, t));
 }
@@ -314,12 +313,136 @@ function decorate() {
 }
 
 /* ---------- Shell ---------- */
-function showTab(id) { document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === id)); document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + id)); }
-document.querySelectorAll('nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+function showTab(id) { document.querySelectorAll('.subnav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === id)); document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + id)); }
+function showView(id) { document.querySelectorAll('.mainnav button').forEach((b) => b.classList.toggle('active', b.dataset.view === id)); document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + id)); if (id === 'setup') renderSummary(); window.scrollTo(0, 0); }
+document.querySelectorAll('.subnav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+document.querySelectorAll('.mainnav button').forEach((b) => b.onclick = () => showView(b.dataset.view));
+
+/* ---------- Simple games home ---------- */
+const GOALS = [
+  { id: 'refresh', name: 'Smoothest', desc: 'Match your screen’s refresh rate' },
+  { id: 'quality60', name: 'Best looking', desc: 'Max visuals at 60 fps' },
+  { id: 'balanced', name: 'Balanced', desc: 'Good looks, good fps' },
+  { id: 'competitive', name: 'Competitive', desc: 'Highest fps, lowest lag' },
+  { id: 'battery', name: 'Battery life', desc: 'Cap fps, save power', portable: true },
+];
+function currentGoal() { return setup.goal || 'refresh'; }
+function renderGoalChips() {
+  const row = $('goalChips'); row.innerHTML = '';
+  row.append(el('span', { class: 'goal-label' }, 'Goal:'));
+  GOALS.filter((g) => !g.portable || setup.form !== 'desktop').forEach((g) => row.append(el('button', { type: 'button', class: 'chip-btn' + (currentGoal() === g.id ? ' active' : ''), title: g.desc, onclick: () => { setup.goal = g.id; saveSetup(); renderGoalChips(); } }, g.name)));
+}
+function renderGameGrid() {
+  const q = ($('gameSearch').value || '').toLowerCase(); const grid = $('gameGrid'); grid.innerHTML = '';
+  GAMES.filter((g) => g.name.toLowerCase().includes(q)).forEach((g) => {
+    const short = g.name.replace(/\s*\(.*\)/, '');
+    grid.append(el('button', { type: 'button', class: 'game-tile', onclick: () => openGame(g.id) }, el('span', { class: 'gt-initial', style: `background:${tileColor(g.id)}` }, short.replace(/^(The|Marvel's|Call of Duty:)\s*/i, '').slice(0, 1)), el('span', { class: 'gt-name' }, short), APPLY_SUPPORTED.includes(g.id) ? el('span', { class: 'gt-badge' }, 'Auto-apply') : ''));
+  });
+}
+function tileColor(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 45% 38%)`; }
+function openGame(id) {
+  $('game').value = id; $('targetMode').value = currentGoal();
+  if (currentGoal() === 'battery' && !$('targetFps').dataset.touched) $('targetFps').value = 45;
+  runRecommend();
+}
+$('gameSearch').addEventListener('input', renderGameGrid);
+$('targetFps').addEventListener('change', () => { $('targetFps').dataset.touched = '1'; });
+
+/* ---------- Setup summary ---------- */
+function renderSummary() {
+  const es = engineSetup(); const gpu = resolveGpu(es), cpu = resolveCpu(es); const d = setup.device ? DEVICE_BY_ID[setup.device] : null; const mon = setup.monitors[0];
+  const pm = d && d.powerModes ? d.powerModes[setup.powerModeIdx ?? d.defaultPower] : null;
+  const f = systemFactors(es);
+  const rows = [['Device', d ? d.name : `Custom ${setup.form}`], ['Processor', cpu.name], ['Graphics', gpu.name], ['Memory', `${setup.ramGB} GB`], ['Screen', `${mon.w}x${mon.h} at ${mon.hz} Hz${mon.vrr ? ', VRR on' : ''}${setup.monitors.length > 1 ? ` (+${setup.monitors.length - 1} more)` : ''}`]];
+  if (pm) rows.push(['Power mode', pm.name]);
+  rows.push(['Goal', (GOALS.find((g) => g.id === currentGoal()) || GOALS[0]).name], ['Accuracy', setup.calibration ? 'Calibrated (about ±7%)' : 'Not calibrated (about ±15%)']);
+  const card = el('div', { class: 'summary-card' }, el('h2', {}, 'My setup'));
+  rows.forEach(([k, v]) => card.append(el('div', { class: 'set-row' }, el('span', {}, k), el('strong', {}, v))));
+  if (f.warnings.length) { const w = el('div', { class: 'warnings' }); f.warnings.forEach((t) => w.append(el('div', {}, t))); card.append(el('h3', {}, 'Worth fixing'), w); }
+  card.append(el('div', { class: 'hero-actions' }, el('button', { class: 'big primary', type: 'button', onclick: () => openWizard() }, 'Run setup again'), el('button', { class: 'big', type: 'button', onclick: () => { $('advancedBox').open = true; showTab('calibrate'); $('advancedBox').scrollIntoView({ behavior: 'smooth' }); } }, setup.calibration ? 'Recalibrate' : 'Improve accuracy')));
+  $('setupSummary').innerHTML = ''; $('setupSummary').append(card);
+}
+
+/* ---------- First-run setup guide ---------- */
+const wiz = { step: 'welcome', type: null };
+function openWizard() { wiz.step = 'welcome'; $('wizard').hidden = false; document.body.classList.add('wiz-open'); renderWizard(); }
+function closeWizard() { setup.onboarded = true; saveSetup(); $('wizard').hidden = true; document.body.classList.remove('wiz-open'); writeAllFields(); renderMonitors(); fillRes(); refreshSetupWarnings(); renderGoalChips(); showView('games'); }
+function writeAllFields() { simpleFields.forEach((id) => writeField(id, setup[keyMap[id] || id])); periFields.forEach((id) => writeField(id, setup.peripherals[id])); bgFields.forEach((id) => writeField(id, setup.background[id])); $('device').value = setup.device || ''; applyDevice(false); }
+function tiles(items) { const g = el('div', { class: 'wiz-tiles' }); items.forEach(([label, sub, fn]) => g.append(el('button', { type: 'button', class: 'wiz-tile', onclick: fn }, el('strong', {}, label), sub ? el('span', {}, sub) : ''))); return g; }
+function wizScreen(title, sub, ...content) {
+  const steps = ['welcome', 'device', 'power', 'screen', 'goal'];
+  const idx = Math.max(0, steps.indexOf(wiz.step === 'confirm' || wiz.step === 'type' || wiz.step === 'model' || wiz.step === 'parts' ? 'device' : wiz.step));
+  const w = $('wizard'); w.innerHTML = '';
+  w.append(el('div', { class: 'wiz-card' },
+    el('div', { class: 'wiz-progress' }, ...steps.map((_, i) => el('span', { class: i <= idx ? 'on' : '' }))),
+    el('h1', {}, title), sub ? el('p', { class: 'wiz-sub' }, sub) : '', ...content,
+    setup.onboarded ? el('button', { type: 'button', class: 'wiz-skip', onclick: closeWizard }, 'Close') : ''));
+}
+function go(step) { wiz.step = step; renderWizard(); }
+async function renderWizard() {
+  const s = wiz.step;
+  if (s === 'welcome') {
+    if (!isDesktopApp) return wizScreen('Let’s set up your device', 'Takes about a minute. Answer a few questions and you’ll get the best settings for every game.', el('button', { type: 'button', class: 'big primary', onclick: () => go('type') }, 'Start'));
+    wizScreen('Checking your hardware…', 'This takes a few seconds.', el('div', { class: 'spinner' }));
+    await detect(true); return go('confirm');
+  }
+  if (s === 'confirm') {
+    const d = setup.device ? DEVICE_BY_ID[setup.device] : null; const es = engineSetup();
+    if (!d && (!CPUS.some((c) => c.name === setup.cpu) || !GPUS.some((g) => g.name === setup.gpu))) return go('type');
+    const what = d ? d.name : `A ${setup.form === 'laptop' ? 'laptop' : 'PC'} with ${resolveCpu(es).name} and ${resolveGpu(es).name}`;
+    return wizScreen('Is this your device?', null, el('div', { class: 'wiz-found' }, what), el('div', { class: 'wiz-buttons' }, el('button', { type: 'button', class: 'big primary', onclick: () => go(d && d.powerModes || setup.form === 'laptop' ? 'power' : 'screen') }, 'Yes, that’s it'), el('button', { type: 'button', class: 'big', onclick: () => go('type') }, 'No, I’ll pick it')));
+  }
+  if (s === 'type') return wizScreen('What are you setting up?', null, tiles([
+    ['Handheld', 'ROG Ally, Steam Deck, Legion Go, Claw', () => { wiz.type = 'handheld'; go('model'); }],
+    ['Laptop', 'Gaming or regular laptop', () => { wiz.type = 'laptop'; go('model'); }],
+    ['Desktop', 'Prebuilt or self-built PC', () => { wiz.type = 'desktop'; go('model'); }],
+  ]));
+  if (s === 'model') {
+    const list = DEVICES.filter((d) => d.type === wiz.type);
+    return wizScreen('Which one?', wiz.type === 'desktop' ? 'Pick your prebuilt, or choose "Mine isn’t listed" for a custom PC.' : null, tiles([
+      ...list.map((d) => [d.name.replace(/\s*\(.*\)$/, ''), (d.name.match(/\((.*)\)$/) || [])[1] || '', () => { setup.device = d.id; markManual('device'); applyDevice(true); saveSetup(); go(d.powerModes || wiz.type === 'laptop' ? 'power' : 'screen'); }]),
+      ['Mine isn’t listed', 'Enter the processor and graphics card', () => { setup.device = ''; setup.form = wiz.type; markManual('device'); saveSetup(); go('parts'); }],
+    ]));
+  }
+  if (s === 'parts') {
+    const cpuIn = el('input', { list: 'cpuList', value: setup.cpu || '', placeholder: 'e.g. Ryzen 7 7800X3D' });
+    const gpuIn = el('input', { list: 'gpuList', value: setup.gpu || '', placeholder: 'e.g. RTX 4070' });
+    const ram = el('select'); [8, 16, 32, 64].forEach((n) => ram.append(el('option', { value: n }, `${n} GB`))); ram.value = [8, 16, 32, 64].includes(+setup.ramGB) ? setup.ramGB : 16;
+    return wizScreen('Your parts', isDesktopApp ? 'Filled in from your hardware. Change anything that’s wrong.' : 'Start typing and pick from the list.',
+      el('label', { class: 'wiz-field' }, 'Processor (CPU)', cpuIn), el('label', { class: 'wiz-field' }, 'Graphics card (GPU)', gpuIn), el('label', { class: 'wiz-field' }, 'Memory (RAM)', ram),
+      el('div', { class: 'wiz-buttons' }, el('button', { type: 'button', class: 'big primary', onclick: () => { setup.cpu = cpuIn.value; setup.gpu = gpuIn.value; setup.ramGB = +ram.value; ['cpu', 'gpu', 'ramGB'].forEach(markManual); saveSetup(); go(setup.form === 'laptop' ? 'power' : 'screen'); } }, 'Next')));
+  }
+  if (s === 'power') {
+    const d = setup.device ? DEVICE_BY_ID[setup.device] : null;
+    if (d && d.powerModes) return wizScreen('How do you usually play?', 'Pick the power mode you play in most. You can change it any time.', tiles(d.powerModes.map((p, i) => [p.name, i === d.defaultPower ? 'Most common' : '', () => { setup.powerModeIdx = i; markManual('powerMode'); saveSetup(); go('screen'); }])));
+    return wizScreen('How do you usually play?', null, tiles([['Plugged in', 'Full performance', () => { setup.onBattery = false; markManual('onBattery'); saveSetup(); go('screen'); }], ['On battery', 'About 30-40% slower', () => { setup.onBattery = true; markManual('onBattery'); saveSetup(); go('screen'); }]]));
+  }
+  if (s === 'screen') {
+    const ext = setup.monitors.findIndex((m) => !m.builtin && m.link !== 'internal');
+    if (ext < 0) return go('goal');
+    const m = setup.monitors[ext];
+    const hzSel = el('select'); [60, 75, 100, 120, 144, 165, 170, 180, 240, 280, 360, 480, 540].forEach((v) => hzSel.append(el('option', { value: v }, `${v} Hz`))); if (![...hzSel.options].some((o) => +o.value === m.hz)) hzSel.append(el('option', { value: m.hz }, `${m.hz} Hz`)); hzSel.value = m.hz;
+    const vrrBtns = (val) => { m.vrr = val; m.vrrType = val ? 'freesync' : 'none'; m.manual = [...new Set([...(m.manual || []), 'vrr'])]; };
+    const multi = setup.monitors.length > 1;
+    const next = () => { m.hz = +hzSel.value; m.manual = [...new Set([...(m.manual || []), 'hz'])]; saveSetup(); go(multi ? 'screen2' : 'goal'); };
+    return wizScreen('Your monitor', m.model ? `Found: ${m.model}, ${m.w}x${m.h}` : `Found: ${m.w}x${m.h}`,
+      el('label', { class: 'wiz-field' }, 'Highest refresh rate it supports', hzSel),
+      el('div', { class: 'wiz-q' }, 'Does it have FreeSync or G-SYNC?'),
+      tiles([['Yes', '', () => { vrrBtns(true); next(); }], ['No', '', () => { vrrBtns(false); next(); }], ['Not sure', 'Treated as no', () => { vrrBtns(false); next(); }]]),
+      m.model && isDesktopApp ? el('button', { type: 'button', class: 'linkish', onclick: () => runAction('monitor-specs', m.model) }, `Look up ${m.model} specs`) : '');
+  }
+  if (s === 'screen2') return wizScreen('Other screens', `You have ${setup.monitors.length} screens. Do you play videos on another one while gaming?`, tiles([
+    ['Yes, often', 'YouTube, Twitch, etc.', () => { setup.monitors.slice(1).forEach((m) => { m.video = true; }); setup.background.browserVideo = true; saveSetup(); go('goal'); }],
+    ['No', '', () => { setup.monitors.slice(1).forEach((m) => { m.video = false; }); setup.background.browserVideo = false; saveSetup(); go('goal'); }]]));
+  if (s === 'goal') return wizScreen('What matters most to you?', 'You can switch this per game later.', tiles(GOALS.filter((g) => !g.portable || setup.form !== 'desktop').map((g) => [g.name, g.desc, () => { setup.goal = g.id; saveSetup(); go('done'); }])));
+  if (s === 'done') return wizScreen('You’re all set', 'Pick a game to see its best settings.', el('button', { type: 'button', class: 'big primary', onclick: closeWizard }, 'Show me my games'), el('p', { class: 'wiz-sub small' }, 'Want even more accurate numbers? Later, play one game with an fps counter on and enter it under My setup > Improve accuracy.'));
+}
+
 $('btnDetect').onclick = () => detect(false);
 $('autoDetect').checked = setup.autoDetect !== false; $('autoDetect').onchange = () => { setup.autoDetect = $('autoDetect').checked; saveSetup(); };
 $('btnExport').onclick = () => { const a = el('a', { href: 'data:application/json,' + encodeURIComponent(JSON.stringify(setup, null, 2)), download: 'my-setup.json' }); a.click(); };
 $('fileImport').onchange = async (ev) => { const f = ev.target.files[0]; if (!f) return; setup = { ...defaultSetup(), ...JSON.parse(await f.text()) }; saveSetup(); location.reload(); };
-initSetup(); initGames(); decorate();
-if (isDesktopApp && setup.autoDetect !== false) detect(true);
+initSetup(); initGames(); decorate(); renderGoalChips(); renderGameGrid();
+if (!setup.onboarded) openWizard();
+else if (isDesktopApp && setup.autoDetect !== false) detect(true);
 window.__app = { engineSetup, setup: () => setup, runRecommend };

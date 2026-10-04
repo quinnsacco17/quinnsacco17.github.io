@@ -18,7 +18,8 @@ const V = {
 };
 
 function g(name, fam, idx, vram, extra = {}) {
-  return { name, idx, vram, tdp: extra.tdp || 0, mobile: !!extra.mobile, ...V[fam], family: fam, ports: extra.ports || (fam === 'nv50' || fam === 'rdna4' ? ['DP2.1', 'HDMI2.1'] : fam === 'nv40' || fam === 'nv30' || fam === 'rdna3' || fam === 'rdna2' || fam === 'arcA' || fam === 'arcB' ? ['DP1.4', 'HDMI2.1'] : ['DP1.4', 'HDMI2.0']) };
+  const vendor = fam === 'igpu' ? (/^AMD/.test(name) ? 'AMD' : /^Intel/.test(name) ? 'Intel' : /^Apple/.test(name) ? 'Apple' : 'Integrated') : V[fam].vendor;
+  return { name, idx, vram, tdp: extra.tdp || 0, mobile: !!extra.mobile, ...V[fam], vendor, family: fam, ports: extra.ports || (fam === 'nv50' || fam === 'rdna4' ? ['DP2.1', 'HDMI2.1'] : fam === 'nv40' || fam === 'nv30' || fam === 'rdna3' || fam === 'rdna2' || fam === 'arcA' || fam === 'arcB' ? ['DP1.4', 'HDMI2.1'] : ['DP1.4', 'HDMI2.0']) };
 }
 
 export const GPUS = [
