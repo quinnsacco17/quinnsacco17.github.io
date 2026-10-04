@@ -125,10 +125,17 @@ export function recommend(setup, game, opts) {
   // Goal unreachable: drop to the highest smooth fps tier this hardware can hold, then maximize visuals there.
   if (!anyMeets && !competitive && !opts._tier) {
     const tiers = [144, 120, 100, 90, 75, 60, 50, 45, 40, 30].filter((t) => t < target && (mon.vrr ? t >= 40 || t === 30 : mon.hz % t === 0));
+    const qualityFirst = ['quality60', 'quality', 'balanced'].includes(mode);
+    let pick = null;
     for (const t of tiers) {
+      if (qualityFirst && pick && t < 40) break;
       const r = recommend(setup, game, { ...opts, mode: 'quality', targetFps: t, w, h, _tier: true });
-      if (r.anyMeets) return { ...r, mode, tierFallback: { from: target, to: t }, resFallback };
+      if (!r.anyMeets) continue;
+      if (!qualityFirst) { pick = { r, t }; break; }
+      const score = r.best.vis + t / 12;
+      if (!pick || score > pick.score) pick = { r, t, score };
     }
+    if (pick) return { ...pick.r, mode, tierFallback: { from: target, to: pick.t }, resFallback };
   }
   return { target, lowsTarget, mode, w, h, best, candidates: candidates.slice(0, 12), anyMeets, resFallback, frameCap: frameCapAdvice(setup, best.est, mon, game, competitive) };
 }

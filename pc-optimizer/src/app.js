@@ -4,7 +4,7 @@ import { GAMES, GAME_BY_ID } from './engine/data/games.js';
 import { DEVICES, DEVICE_BY_ID } from './engine/data/devices.js';
 import { LINKS, COMMON_RES, REFRESH } from './engine/data/displays.js';
 import { PCIE, STORAGE, NETWORK, USB_HUB, MOUSE_CONN, CONTROLLER_CONN, AUDIO_CONN, LAPTOP_GPU_MODE } from './engine/data/connections.js';
-import { estimate, systemFactors, displayChecks, resolveGpu, resolveCpu, availableUpscalers, UPSCALE_MODES } from './engine/estimator.js';
+import { estimate, systemFactors, displayChecks, resolveGpu, resolveCpu, availableUpscalers, fgOptions, UPSCALE_MODES } from './engine/estimator.js';
 import { recommend, TARGET_MODES, baseConfig, calibrate } from './engine/recommender.js';
 import { renderPreview, SETTING_EXPLAIN } from './preview.js';
 import { matchHardware } from './engine/match.js';
@@ -143,59 +143,78 @@ function fillCalRt() { const g = GAME_BY_ID[$('calGame').value]; const s = $('ca
 function runRecommend() {
   const game = GAME_BY_ID[$('game').value]; const es = engineSetup();
   const [w, h] = $('res').value.split('x').map(Number);
-  const rec = recommend(es, game, { mode: $('targetMode').value, targetFps: +$('targetFps').value, w, h });
+  const rec = recommend(es, game, { mode: $('targetMode').value, targetFps: +$('targetFps').value, w, h, prefs: setup.prefs || {}, locks: (setup.locks || {})[game.id] || {} });
   lastRec = { rec, game, es };
   renderResult(rec, game, es);
 }
 function kpi(l, v, cls = '') { return el('div', { class: 'kpi ' + cls }, el('div', { class: 'v' }, v), el('div', { class: 'l' }, l)); }
+function process_isWin() { return window.optimizer?.platform === 'win32'; }
 const APPLY_SUPPORTED = ['cyberpunk', 'fortnite', 'rivals', 'finals', 'palworld', 'wukong', 'stalker2', 'oblivion', 'expedition33', 'pubg', 'cs2', 'apex', 'minecraft', 'eldenring', 'ow2'];
 function renderResult(rec, game, es) {
   const r = $('result'); r.innerHTML = '';
   $('gamesHome').hidden = true;
   const b = rec.best, e = b.est, gpu = e.gpu;
-  const live = { ...b.cfg, settings: [...b.cfg.settings] };
-  const upName = b.up ? `${b.up.name} ${UPSCALE_MODES.find((m) => m.id === live.mode).name.replace(/ \(.*\)/, '')}` : 'Off';
-  const status = rec.tierFallback ? ['warn', `${fmt(rec.tierFallback.from)} fps isn\u2019t reachable here. Tuned for a steady ${fmt(rec.tierFallback.to)} fps instead.`] : b.meets ? ['ok', `Hits your ${fmt(rec.target)} fps goal`] : e.fps >= rec.target * 0.85 ? ['warn', `Just under your ${fmt(rec.target)} fps goal`] : ['bad', `Can't reach ${fmt(rec.target)} fps here. This is the best it can do.`];
+  const live = { ...b.cfg, settings: [...b.cfg.settings], upscaler: b.up, fg: b.fg.id };
+  const locks = (setup.locks ||= {})[game.id] ||= {};
+  const ups = availableUpscalers(gpu, game), fgs = fgOptions(gpu, game);
+  const upLabel = () => live.upscaler && live.mode !== 'native' ? `${live.upscaler.name} ${UPSCALE_MODES.find((m) => m.id === live.mode).name.replace(/ \(.*\)/, '')}` : 'Off';
+  const numEl = el('span', { class: 'num' }, fmt(e.fps)), statusEl = el('div', { class: 'status' }), subEl = el('div', { class: 'hero-sub' });
+  const setStatus = (est, edited) => {
+    const t = rec.tierFallback ? rec.tierFallback.to : rec.target;
+    const st = !edited && rec.tierFallback ? ['warn', `${fmt(rec.tierFallback.from)} fps isn’t reachable here. Tuned for a steady ${fmt(rec.tierFallback.to)} fps instead.`] : est.fps >= t - 0.5 ? ['ok', `Hits your ${fmt(t)} fps goal${edited ? ' with your changes' : ''}`] : est.fps >= t * 0.85 ? ['warn', `Just under your ${fmt(t)} fps goal${edited ? ' with your changes' : ''}`] : ['bad', edited ? `Below your ${fmt(t)} fps goal with your changes` : `Can’t reach ${fmt(t)} fps here. This is the best it can do.`];
+    statusEl.className = 'status ' + st[0]; statusEl.textContent = st[1];
+    subEl.textContent = `${rec.w}x${rec.h} · Upscaling: ${upLabel()}${live.fg !== 'off' ? ' · Frame generation on' : ''}${game.rt && live.rtIndex ? ' · Ray tracing on' : ''} · 1% lows about ${fmt(est.lows)} fps`;
+  };
+  let edited = false;
+  const update = () => { const est = estimate(es, game, { ...live }); numEl.textContent = fmt(est.fps); setStatus(est, edited); reoptBtn.hidden = !Object.keys(locks).length; clearBtn.hidden = !Object.keys(locks).length; if (typeof redraw === 'function') redraw(); };
   const hero = el('div', { class: 'hero' },
     el('button', { class: 'back', type: 'button', onclick: () => { r.innerHTML = ''; $('gamesHome').hidden = false; } }, '← All games'),
     el('div', { class: 'hero-title' }, game.name),
-    el('div', { class: 'hero-fps' }, el('span', { class: 'num' }, fmt(e.fps)), el('span', { class: 'unit' }, 'fps average')),
-    el('div', { class: 'status ' + status[0] }, status[1]),
-    el('div', { class: 'hero-sub' }, `${rec.w}x${rec.h} · Upscaling: ${upName}${b.fg.id !== 'off' ? ' · Frame generation on' : ''}${game.rt && live.rtIndex ? ' · Ray tracing on' : ''}`));
+    el('div', { class: 'hero-fps' }, numEl, el('span', { class: 'unit' }, 'fps average')), statusEl, subEl);
   const actions = el('div', { class: 'hero-actions' });
-  if (isDesktopApp && APPLY_SUPPORTED.includes(game.id)) actions.append(el('button', { class: 'big primary', type: 'button', onclick: () => applyToGame(game, live, b, rec) }, 'Apply to game'));
-  actions.append(el('button', { class: 'big' + (isDesktopApp && APPLY_SUPPORTED.includes(game.id) ? '' : ' primary'), type: 'button', onclick: () => copyText(settingsText(game, live, b, e, rec)) }, 'Copy settings'));
-  if (!(isDesktopApp && APPLY_SUPPORTED.includes(game.id))) actions.append(el('div', { class: 'notes' }, isDesktopApp ? 'This game stores settings where the app can’t write them. Set these in the game’s menu.' : 'Set these in the game’s menu.'));
+  const canApply = isDesktopApp && APPLY_SUPPORTED.includes(game.id);
+  if (canApply) actions.append(el('button', { class: 'big primary', type: 'button', onclick: () => applyToGame(game, live, { ...b, up: live.upscaler, fg: fgs.find((f) => f.id === live.fg) || b.fg }, rec) }, 'Apply to game'));
+  actions.append(el('button', { class: 'big' + (canApply ? '' : ' primary'), type: 'button', onclick: () => copyText(settingsText(game, live, { ...b, up: live.upscaler, fg: fgs.find((f) => f.id === live.fg) || b.fg }, estimate(es, game, live), rec)) }, 'Copy settings'));
+  if (isDesktopApp && process_isWin()) actions.append(el('button', { class: 'big', type: 'button', onclick: () => measureFlow(game, live, es, rec) }, 'Measure my real fps'));
   hero.append(actions);
-  // Settings list
-  const list = el('div', { class: 'set-list' });
-  const rows = game.settings.map((s, i) => [s.name, s.options[live.settings[i]]]);
-  if (game.rt) rows.push(['Ray tracing', game.rt.modes[live.rtIndex].name]);
-  rows.push(['Upscaling', upName], ['Frame generation', b.fg.name], [gpu.vendor === 'NVIDIA' ? 'NVIDIA Reflex' : gpu.vendor === 'AMD' ? 'AMD Anti-Lag' : 'Low latency mode', 'On']);
-  rows.forEach(([k, v]) => list.append(el('div', { class: 'set-row' }, el('span', {}, k), el('strong', {}, v))));
+  if (!canApply) hero.append(el('div', { class: 'notes' }, isDesktopApp ? 'This game stores settings where the app can’t write them. Set these in the game’s menu.' : 'Set these in the game’s menu.'));
+  if (rec.lockConflict) hero.append(el('div', { class: 'tip warn' }, 'Your pinned settings couldn’t all be kept together, so pins were ignored for this result.'));
+  // Editable settings list
+  const reoptBtn = el('button', { class: 'small primary', type: 'button', onclick: () => { saveSetup(); runRecommend(); } }, 'Re-optimize around my pins');
+  const clearBtn = el('button', { class: 'small', type: 'button', onclick: () => { setup.locks[game.id] = {}; saveSetup(); runRecommend(); } }, 'Clear pins');
+  const list = el('div', { class: 'set-list editable' });
+  const addRow = (label, options, value, onChange, lockKey) => {
+    const sel = el('select'); options.forEach(([v, t]) => sel.append(el('option', { value: v }, t))); sel.value = value;
+    const pin = el('button', { type: 'button', class: 'pin' + (lockKey in locks ? ' on' : ''), title: 'Pin: keep this when re-optimizing' }, lockKey in locks ? 'Pinned' : 'Pin');
+    const setPin = (on, v) => { if (on) locks[lockKey] = v; else delete locks[lockKey]; pin.className = 'pin' + (on ? ' on' : ''); pin.textContent = on ? 'Pinned' : 'Pin'; saveSetup(); };
+    pin.onclick = () => setPin(!(lockKey in locks), onChange(sel.value, true));
+    sel.onchange = () => { edited = true; const v = onChange(sel.value); setPin(true, v); update(); };
+    list.append(el('div', { class: 'set-row' }, el('span', {}, label), el('div', { class: 'set-ctl' }, sel, pin)));
+  };
+  game.settings.forEach((s, i) => addRow(s.name, s.options.map((o, j) => [j, o]), live.settings[i], (v, peek) => { if (!peek) live.settings[i] = +v; return live.settings[i]; }, s.key));
+  if (game.rt) addRow('Ray tracing', game.rt.modes.map((m, j) => [j, m.name]), live.rtIndex, (v, peek) => { if (!peek) live.rtIndex = +v; return live.rtIndex; }, 'rt');
+  const upOpts = [['native', 'Off (native)']]; ups.forEach((u) => UPSCALE_MODES.forEach((m) => { if (m.id !== 'native' && (m.id !== 'dlaa' || /dlss|fsr4|xessXMX/.test(u.tech))) upOpts.push([`${u.id}:${m.id}`, `${u.name} ${m.name.replace(/ \(.*\)/, '')}`]); }));
+  addRow('Upscaling', upOpts, live.upscaler && live.mode !== 'native' ? `${live.upscaler.id}:${live.mode}` : 'native', (v, peek) => { if (!peek) { if (v === 'native') { live.upscaler = null; live.mode = 'native'; } else { const [u, m] = v.split(':'); live.upscaler = ups.find((x) => x.id === u); live.mode = m; } } return live.mode; }, 'mode');
+  if (fgs.length > 1) addRow('Frame generation', fgs.map((f) => [f.id, f.name]), live.fg, (v, peek) => { if (!peek) live.fg = v; return live.fg; }, 'fg');
+  list.append(el('div', { class: 'set-row' }, el('span', {}, gpu.vendor === 'NVIDIA' ? 'NVIDIA Reflex' : gpu.vendor === 'AMD' ? 'AMD Anti-Lag' : 'Low latency mode'), el('strong', {}, 'On')));
+  const listHead = el('div', { class: 'list-head' }, el('span', {}, 'Change anything. The fps updates as you go. Changed settings get pinned.'), reoptBtn, clearBtn);
   const capTip = rec.frameCap[0] ? el('div', { class: 'tip' }, rec.frameCap[0]) : '';
   // Details
-  const det = el('details', { class: 'more' }, el('summary', {}, 'More details: tweak settings, preview, alternatives'));
+  const det = el('details', { class: 'more' }, el('summary', {}, 'More details: preview, alternatives, tips'));
   det.append(el('div', { class: 'kpis' }, kpi('Likely range', `${fmt(e.range[0])}-${fmt(e.range[1])}`), kpi('1% lows', `${fmt(e.lows)} fps`), kpi('Limited by', e.bottleneck), kpi('Video memory', `${e.vram.toFixed(1)} / ${e.vramAvail} GB`, e.vramOver ? 'bad' : '')));
   if (!b.meets && rec.resFallback) det.append(el('div', { class: 'tip' }, `Dropping to ${rec.resFallback.w}x${rec.resFallback.h} reaches about ${fmt(rec.resFallback.est.fps)} fps. Change it under Options on the games screen.`));
   if (e.fgNote) det.append(el('div', { class: 'tip warn' }, e.fgNote));
-  const grid = el('div', { class: 'settings-grid' });
-  const tbl = el('table'); tbl.append(el('tr', {}, el('th', {}, 'Setting'), el('th', {}, 'Use'), el('th', {}, 'What you’ll notice')));
   const canvas = el('canvas', { id: 'preview', width: 640, height: 360 });
-  const liveFps = el('div', { class: 'notes' });
-  const redraw = () => { const st = {}; game.settings.forEach((s, i) => { st[s.key] = live.settings[i]; }); st.rt = live.rtIndex; st.upscale = UPSCALE_MODES.find((m) => m.id === live.mode).scale; st.upTech = b.up?.tech; renderPreview(canvas, st); const e2 = estimate(es, game, live); liveFps.textContent = `With your changes: ${fmt(e2.fps)} fps average, ${fmt(e2.lows)} lows. "Apply" and "Copy" use your changes.`; };
-  game.settings.forEach((s, i) => { const sel = el('select'); s.options.forEach((o, j) => sel.append(el('option', { value: j }, o))); sel.value = live.settings[i]; const ex = el('td', {}, (SETTING_EXPLAIN[s.key] || [])[live.settings[i]] || ''); sel.onchange = () => { live.settings[i] = +sel.value; ex.textContent = (SETTING_EXPLAIN[s.key] || [])[live.settings[i]] || ''; redraw(); }; tbl.append(el('tr', {}, el('td', {}, s.name), el('td', {}, sel), ex)); });
-  if (game.rt) { const sel = el('select'); game.rt.modes.forEach((m, j) => sel.append(el('option', { value: j }, m.name))); sel.value = live.rtIndex; sel.onchange = () => { live.rtIndex = +sel.value; redraw(); }; tbl.append(el('tr', {}, el('td', {}, 'Ray tracing'), el('td', {}, sel), el('td', {}, 'Big visual upgrade, big fps cost.'))); }
-  { const sel = el('select'); UPSCALE_MODES.forEach((m) => { if (m.id === 'native' || b.up) sel.append(el('option', { value: m.id }, m.name)); }); sel.value = live.mode; sel.onchange = () => { live.mode = sel.value; redraw(); }; tbl.append(el('tr', {}, el('td', {}, 'Upscaling'), el('td', {}, sel), el('td', {}, 'Renders lower and sharpens up. Quality mode looks close to native.'))); }
-  grid.append(el('div', {}, tbl, liveFps), el('div', {}, canvas, el('div', { class: 'notes' }, 'Illustration of what each setting changes, not real game footage.')));
-  det.append(el('h3', {}, 'Tweak settings'), grid); redraw();
+  var redraw = () => { const st = {}; game.settings.forEach((s, i) => { st[s.key] = live.settings[i]; }); st.rt = live.rtIndex; st.upscale = UPSCALE_MODES.find((m) => m.id === live.mode).scale; st.upTech = live.upscaler?.tech; renderPreview(canvas, st); };
+  det.append(el('h3', {}, 'Preview'), canvas, el('div', { class: 'notes' }, 'Illustration of what your settings change, not real game footage. It updates when you change a setting above.')); redraw();
   const adv = el('div', { class: 'notes' }); rec.frameCap.slice(1).forEach((t) => adv.append(el('div', {}, '• ' + t))); game.tips.forEach((t) => adv.append(el('div', {}, '• ' + t)));
   det.append(el('h3', {}, 'Tips for this game'), adv);
   const f = e.factors; if (f.warnings.length) { const w = el('div', { class: 'warnings' }); f.warnings.forEach((t) => w.append(el('div', {}, t))); det.append(el('h3', {}, 'Things in your setup holding this back'), w); }
   const alt = el('table'); alt.append(el('tr', {}, el('th', {}, 'Other option'), el('th', {}, 'fps'), el('th', {}, 'Looks'), el('th', {}, 'Goal')));
   rec.candidates.slice(0, 6).forEach((c) => alt.append(el('tr', { class: 'alt', onclick: () => { rec.best = c; renderResult(rec, game, es); window.scrollTo(0, 0); } }, el('td', {}, `${c.up ? c.up.name + ' ' + UPSCALE_MODES.find((m) => m.id === c.cfg.mode).name.replace(/ \(.*\)/, '') : 'No upscaling'}${c.fg.id !== 'off' ? ' + frame gen' : ''}${game.rt && c.cfg.rtIndex ? ' + ray tracing' : ''}`), el('td', {}, fmt(c.est.fps)), el('td', {}, c.vis.toFixed(1) + '/10'), el('td', {}, c.meets ? '✓' : '—'))));
   det.append(el('h3', {}, 'Other ways to run it (tap to use)'), alt);
-  r.append(el('div', { class: 'result-card' }, hero, capTip, list, det));
+  r.append(el('div', { class: 'result-card' }, hero, capTip, listHead, list, det));
+  update(); edited = false; setStatus(estimate(es, game, live), false);
   window.scrollTo(0, 0);
 }
 function settingsText(game, cfg, b, e, rec) {
@@ -318,6 +337,8 @@ function showView(id) { document.querySelectorAll('.mainnav button').forEach((b)
 document.querySelectorAll('.subnav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 document.querySelectorAll('.mainnav button').forEach((b) => b.onclick = () => showView(b.dataset.view));
 
+function measureFlow() { alert('Coming in this release.'); }
+
 /* ---------- Simple games home ---------- */
 const GOALS = [
   { id: 'refresh', name: 'Smoothest', desc: 'Match your screen’s refresh rate' },
@@ -360,7 +381,15 @@ function renderSummary() {
   rows.forEach(([k, v]) => card.append(el('div', { class: 'set-row' }, el('span', {}, k), el('strong', {}, v))));
   if (f.warnings.length) { const w = el('div', { class: 'warnings' }); f.warnings.forEach((t) => w.append(el('div', {}, t))); card.append(el('h3', {}, 'Worth fixing'), w); }
   card.append(el('div', { class: 'hero-actions' }, el('button', { class: 'big primary', type: 'button', onclick: () => openWizard() }, 'Run setup again'), el('button', { class: 'big', type: 'button', onclick: () => { $('advancedBox').open = true; showTab('calibrate'); $('advancedBox').scrollIntoView({ behavior: 'smooth' }); } }, setup.calibration ? 'Recalibrate' : 'Improve accuracy')));
-  $('setupSummary').innerHTML = ''; $('setupSummary').append(card);
+  const prefs = (setup.prefs ||= {});
+  const pref = (label, key, opts, def) => { const sel = el('select'); opts.forEach(([v, t]) => sel.append(el('option', { value: v }, t))); sel.value = prefs[key] || def; sel.onchange = () => { prefs[key] = sel.value; saveSetup(); }; return el('div', { class: 'set-row' }, el('span', {}, label), sel); };
+  const pcard = el('div', { class: 'summary-card' }, el('h2', {}, 'Preferences'), el('div', { class: 'notes' }, 'Applied to every game. Pin individual settings on a game’s result screen.'),
+    pref('Frame generation', 'fg', [['allow', 'Allow when it helps'], ['never', 'Never use it']], 'allow'),
+    pref('Upscaling', 'upscale', [['allow', 'Allow when it helps'], ['native', 'Native resolution only']], 'allow'),
+    pref('Preferred upscaler', 'upscaler', [['auto', 'Pick the best one'], ['dlss', 'DLSS (NVIDIA)'], ['fsr', 'FSR (AMD, works everywhere)'], ['xess', 'XeSS (Intel, works everywhere)']], 'auto'),
+    pref('Ray tracing', 'rt', [['auto', 'Use if there’s headroom'], ['prefer', 'Prefer ray tracing on'], ['off', 'Always off']], 'auto'),
+    el('div', { class: 'hero-actions' }, el('button', { class: 'small', type: 'button', onclick: () => { if (confirm('Remove every pinned setting in every game?')) { setup.locks = {}; saveSetup(); } } }, 'Clear all pinned settings')));
+  $('setupSummary').innerHTML = ''; $('setupSummary').append(card, pcard);
 }
 
 /* ---------- First-run setup guide ---------- */
