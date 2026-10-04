@@ -91,7 +91,7 @@ const ADAPTERS = {
   cs2: () => ({
     path: 'Steam\\userdata\\<account>\\730\\local\\cfg\\cs2_video.txt', label: 'Counter-Strike 2 video config (cs2_video.txt)',
     async resolve() {
-      const roots = ['C:\\Program Files (x86)\\Steam\\userdata', 'C:\\Steam\\userdata', 'D:\\Steam\\userdata', 'D:\\SteamLibrary\\userdata', 'E:\\Steam\\userdata'];
+      const roots = [process.env.STEAM_USERDATA, 'C:\\Program Files (x86)\\Steam\\userdata', 'C:\\Steam\\userdata', 'D:\\Steam\\userdata', 'D:\\SteamLibrary\\userdata', 'E:\\Steam\\userdata', 'F:\\SteamLibrary\\userdata'].filter(Boolean);
       for (const r of roots) { if (!(await exists(r))) continue; const ids = await fs.readdir(r); let best = null; for (const id of ids) { const p = path.join(r, id, '730', 'local', 'cfg', 'cs2_video.txt'); if (await exists(p)) { const st = await fs.stat(p); if (!best || st.mtimeMs > best.m) best = { p, m: st.mtimeMs }; } } if (best) return best.p; }
       return null;
     },
@@ -164,9 +164,10 @@ const ADAPTERS = {
         Resolution: `${values.w}x${values.h}`, MaximumFPS_OnOff: false, ReflexMode: 'Enabled + Boost', DLSS_BackendPreset: 'Transformer',
       };
       const orders = { DLSS: dlssOrder, FSR3: fsrOrder, ResolutionScaling: ['Off', 'DLSS', 'FSR2', 'FSR3', 'XESS', 'FSR4'], FrameGeneration: ['Off', 'DLSS', 'FSR3'] };
-      const walk = (node) => { if (Array.isArray(node)) node.forEach(walk); else if (node && typeof node === 'object') { if (node.name && node.name in want && want[node.name] != null && 'value' in node) { const v = want[node.name]; if (typeof v === 'string' && Array.isArray(node.values) && !node.values.includes(v)) { skipped.push(`${node.name} (value ${v} not offered)`); } else { node.value = v; if (Array.isArray(node.values)) node.index = node.values.indexOf(v); else if (orders[node.name] && orders[node.name].includes(v)) node.index = orders[node.name].indexOf(v); n++; } delete want[node.name]; } Object.values(node).forEach(walk); } };
+      const seen = new Set();
+      const walk = (node) => { if (Array.isArray(node)) node.forEach(walk); else if (node && typeof node === 'object') { if (node.name && node.name in want && want[node.name] != null && 'value' in node) { const v = want[node.name]; seen.add(node.name); if (typeof v === 'string' && Array.isArray(node.values) && !node.values.includes(v)) { skipped.push(`${node.name} (value ${v} not offered)`); } else { node.value = v; if (Array.isArray(node.values)) node.index = node.values.indexOf(v); else if (orders[node.name] && orders[node.name].includes(v)) node.index = orders[node.name].indexOf(v); n++; } } Object.values(node).forEach(walk); } };
       walk(json);
-      Object.keys(want).forEach((k) => { if (want[k] != null && !['Resolution', 'DLSS_BackendPreset', 'FSR3_FrameGeneration', 'DLSS_MultiFrameGeneration'].includes(k)) skipped.push(k); });
+      Object.keys(want).forEach((k) => { if (want[k] != null && !seen.has(k) && !['Resolution', 'DLSS_BackendPreset', 'FSR3_FrameGeneration', 'DLSS_MultiFrameGeneration'].includes(k)) skipped.push(k); });
       return { text: JSON.stringify(json, null, 2), n, skipped };
     },
   }),
