@@ -69,9 +69,9 @@ export function systemFactors(setup) {
   const ram = setup.ramGB || 16;
   if (ram < 12) { f.cpu *= 0.8; f.lowsPenalty *= 0.8; f.warnings.push(`${ram} GB RAM: modern games page to disk. Expect stutter; 16 GB minimum, 32 GB for UE5 titles.`); }
   else if (ram < 16) { f.cpu *= 0.92; f.lowsPenalty *= 0.9; f.warnings.push('12 GB RAM is under the 16 GB floor for current games.'); }
-  if ((setup.ramChannels || 2) < 2) { f.cpu *= 0.88; if (gpu.family === 'igpu') f.gpu *= 0.65; f.warnings.push('Single-channel RAM: ~12% CPU-bound fps lost; ~35% on an iGPU. Add a second matching stick.'); }
-  if (setup.ramType && /DDR4-(2133|2400|2666)/i.test(setup.ramType) && cpu.vendor === 'AMD') { f.cpu *= 0.95; f.notes.push('Slow DDR4 on Ryzen: 3200-3600 MT/s would add ~5%.'); }
-  if (setup.ramType && /DDR5-(4800|5200)/i.test(setup.ramType) && cpu.vendor !== 'Apple' && !/X3D/.test(cpu.name)) { f.cpu *= 0.96; f.notes.push('DDR5-4800/5200: 6000 MT/s is the sweet spot, ~4% in CPU-bound games.'); }
+  if ((setup.ramChannels || 2) < 2) { f.cpu *= 0.88; f.lowsPenalty *= 0.95; if (gpu.family === 'igpu') f.gpu *= 0.65; f.warnings.push('Single-channel RAM: -12% avg and -16% 1% lows in CPU-bound games (TechSpot 2025), up to -34% in Marvel Rivals; -30-50% on an iGPU. Add a second matching stick.'); }
+  if (setup.ramType && /DDR4-(2133|2400|2666)/i.test(setup.ramType) && cpu.vendor === 'AMD') { f.cpu *= 0.93; f.lowsPenalty *= 0.95; f.notes.push('Slow DDR4 on Ryzen: 3600 MT/s CL16 adds ~6-9% avg and ~10% to 1% lows (TechSpot Ryzen 5000 memory guide).'); }
+  if (setup.ramType && /DDR5-(4800|5200)/i.test(setup.ramType) && cpu.vendor !== 'Apple' && !/X3D/.test(cpu.name)) { const slow = /4800/.test(setup.ramType); f.cpu *= slow ? 0.9 : 0.94; f.notes.push(`DDR5-${slow ? 4800 : 5200} on a non-X3D CPU: 6000 MT/s CL30 adds ~${slow ? 10 : 6}% in CPU-bound games (HUB 13-game test). X3D chips barely care.`); }
   // Cores
   if (cpu.threads < 8) { f.cpu *= 0.8; f.lowsPenalty *= 0.85; f.warnings.push(`${cpu.threads} threads: modern engines want 8+. Expect traversal stutter.`); }
   else if (cpu.cores < 6 && !cpu.eCores) { f.cpu *= 0.92; }
